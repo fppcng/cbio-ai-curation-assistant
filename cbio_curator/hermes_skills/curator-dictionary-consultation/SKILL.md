@@ -1,15 +1,18 @@
 ---
-name: cbioportal_dictionary
+name: curator-dictionary-consultation
 description: Use this skill when mapping source clinical columns to cBioPortal clinical attributes.
 ---
 
 # cBioPortal Clinical Data Dictionary Mapping
 
 1. Use the local Clinical Data Dictionary search tool:
+`/home/cbio26/cbio-ai-curation-assistant/cbio_curator/hermes_skills/curator-dictionary-consultation/search_dictionary_candidates.py`
 
-```text
-/workspace/ai_curation_assistant/tool/search_dictionary_candidates/search_dictionary_candidates.py
-```
+   CLI pattern:
+   `python /home/cbio26/cbio-ai-curation-assistant/cbio_curator/hermes_skills/curator-dictionary-consultation/search_dictionary_candidates.py -s '<source column>' -c '<proposed cbioportal column>' --json`
+
+   Example:
+   `python /home/cbio26/cbio-ai-curation-assistant/cbio_curator/hermes_skills/curator-dictionary-consultation/search_dictionary_candidates.py -s 'Overall Survival (Months)' -c OS_MONTHS --json`
 
 2. For each clinical column:
 
@@ -23,12 +26,7 @@ description: Use this skill when mapping source clinical columns to cBioPortal c
 
 5. Create a custom clinical attribute only when no suitable standard attribute can be identified.
 
-6. Preserve the appropriate attribute level:
-
-```text
-PATIENT
-SAMPLE
-```
+6. Preserve the appropriate attribute level (PATIENT and SAMPLE)
 
 7. Use the datatype and attribute definition that best matches the selected Clinical Data Dictionary attribute.
 
