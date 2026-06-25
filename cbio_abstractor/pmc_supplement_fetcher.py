@@ -15,6 +15,7 @@ import re
 import hashlib
 import http.cookiejar
 import tarfile
+import time
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -39,6 +40,8 @@ HTTP_HEADERS = {
     "Accept": "*/*",
 }
 POW_MAX_ITERATIONS = 20_000_000
+PMC_DOWNLOAD_RETRY_ATTEMPTS = 3
+PMC_DOWNLOAD_RETRY_BASE_DELAY_SECONDS = 1.0
 
 
 @dataclass
@@ -351,12 +354,33 @@ def _download_url_with_urllib_pow(url: str, output_dir: Path, index: int) -> Pat
     return path
 
 
-def _download_url(url: str, output_dir: Path, index: int) -> Path:
+def _is_pmc_download_host(url: str) -> bool:
+    hostname = (urlparse(url).hostname or "").lower()
+    return hostname in {"pmc.ncbi.nlm.nih.gov", "www.ncbi.nlm.nih.gov", "ftp.ncbi.nlm.nih.gov"}
+
+
+def _is_retryable_pmc_download_error(exc: Exception) -> bool:
+    if isinstance(exc, requests.HTTPError):
+        response = exc.response
+        return response is not None and response.status_code in {403, 429, 500, 502, 503, 504}
+    if isinstance(exc, HTTPError):
+        return exc.code in {403, 429, 500, 502, 503, 504}
+    if isinstance(exc, ValueError):
+        message = str(exc)
+        return (
+            "PMC returned an HTML" in message
+            or "proof-of-work challenge" in message
+            or "Preparing to download" in message
+        )
+    return False
+
+
+def _download_url_once(url: str, output_dir: Path, index: int) -> Path:
     try:
         response = requests.get(url, headers=HTTP_HEADERS, timeout=NCBI_TIMEOUT_SECONDS)
         response.raise_for_status()
     except Exception:
-        if urlparse(url).hostname == "pmc.ncbi.nlm.nih.gov":
+        if _is_pmc_download_host(url):
             return _download_url_with_urllib_pow(url, output_dir, index)
         raise
 
@@ -365,7 +389,7 @@ def _download_url(url: str, output_dir: Path, index: int) -> Path:
     if "text/html" in content_type and Path(filename).suffix.lower() in (
         SUPPORTED_SUPPLEMENT_EXTENSIONS | ARCHIVE_EXTENSIONS
     ):
-        if urlparse(url).hostname == "pmc.ncbi.nlm.nih.gov":
+        if _is_pmc_download_host(url):
             return _download_url_with_urllib_pow(url, output_dir, index)
         raise ValueError(f"PMC returned an HTML challenge page instead of {filename}.")
 
@@ -376,6 +400,24 @@ def _download_url(url: str, output_dir: Path, index: int) -> Path:
         path = output_dir / f"{stem}_{index}{suffix}"
     path.write_bytes(response.content)
     return path
+
+
+def _download_url(url: str, output_dir: Path, index: int) -> Path:
+    if not _is_pmc_download_host(url):
+        return _download_url_once(url, output_dir, index)
+
+    last_exc: Exception | None = None
+    for attempt in range(1, PMC_DOWNLOAD_RETRY_ATTEMPTS + 1):
+        try:
+            return _download_url_once(url, output_dir, index)
+        except Exception as exc:
+            last_exc = exc
+            if attempt >= PMC_DOWNLOAD_RETRY_ATTEMPTS or not _is_retryable_pmc_download_error(exc):
+                raise
+            time.sleep(PMC_DOWNLOAD_RETRY_BASE_DELAY_SECONDS * attempt)
+
+    assert last_exc is not None
+    raise last_exc
 
 
 def _safe_extract_path(base_dir: Path, member_name: str) -> Path:
