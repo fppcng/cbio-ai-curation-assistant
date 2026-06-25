@@ -1,0 +1,11 @@
+.env
+api_config.py
+__pycache__/
+*.pyc
+.venv/
+vector_store/
+experiments/
+metadata_inputs/
+pdf_metadata_outputs/
+xml_metadata_outputs/
+/prompts
