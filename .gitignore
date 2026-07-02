@@ -2,3 +2,5 @@
 .env
 /studies
 /cbioportal_dataset
+__pycache__/
+*.pyc
