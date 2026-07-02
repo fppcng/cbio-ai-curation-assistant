@@ -3,7 +3,7 @@ Download article XML, article PDF when available, and supplementary study files 
 
 Example
 -------
-    python cbio_abstractor/hermes_skills/abstractor-study-download/scripts/abstractor_study_download.py PMC8432745           --output-json /tmp/pmc8432745_download.json
+    python hermes_skills/abstractor-study-download/scripts/abstractor_study_download.py PMC8432745           --output-json /tmp/pmc8432745_download.json
 """
 
 from __future__ import annotations
@@ -18,7 +18,8 @@ import tempfile
 from pathlib import Path
 from typing import Any, Sequence
 
-_MODULE_ROOT = Path(__file__).resolve().parents[3]
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_MODULE_ROOT = _REPO_ROOT / "cbio_abstractor"
 if str(_MODULE_ROOT) not in sys.path:
     sys.path.insert(0, str(_MODULE_ROOT))
 
@@ -34,7 +35,6 @@ from pmc_supplement_fetcher import (  # noqa: E402
 )
 
 logger = logging.getLogger(__name__)
-_REPO_ROOT = _MODULE_ROOT.parent
 _DEFAULT_STUDIES_DIR = _REPO_ROOT / "studies"
 
 

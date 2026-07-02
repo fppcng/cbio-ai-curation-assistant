@@ -6,13 +6,13 @@ description: Use this skill when mapping source clinical columns to cBioPortal c
 # cBioPortal Clinical Data Dictionary Mapping
 
 1. Use the local Clinical Data Dictionary search tool:
-`/home/cbio26/cbio-ai-curation-assistant/cbio_curator/hermes_skills/curator-dictionary-consultation/search_dictionary_candidates.py`
+`/home/cbio26/cbio-ai-curation-assistant/hermes_skills/curator-dictionary-consultation/search_dictionary_candidates.py`
 
    CLI pattern:
-   `python /home/cbio26/cbio-ai-curation-assistant/cbio_curator/hermes_skills/curator-dictionary-consultation/search_dictionary_candidates.py -s '<source column>' -c '<proposed cbioportal column>' --json`
+   `python /home/cbio26/cbio-ai-curation-assistant/hermes_skills/curator-dictionary-consultation/search_dictionary_candidates.py -s '<source column>' -c '<proposed cbioportal column>' --json`
 
    Example:
-   `python /home/cbio26/cbio-ai-curation-assistant/cbio_curator/hermes_skills/curator-dictionary-consultation/search_dictionary_candidates.py -s 'Overall Survival (Months)' -c OS_MONTHS --json`
+   `python /home/cbio26/cbio-ai-curation-assistant/hermes_skills/curator-dictionary-consultation/search_dictionary_candidates.py -s 'Overall Survival (Months)' -c OS_MONTHS --json`
 
 2. For each clinical column:
 

@@ -6,13 +6,13 @@ description: Use this skill when mapping cancer types, histologies, diagnoses, o
 # cBioPortal OncoTree Mapping
 
 1. Use the local OncoTree search code:
-`/home/cbio26/cbio-ai-curation-assistant/cbio_curator/hermes_skills/curator-oncotree-consultation/search_oncotree_code.py`
+`/home/cbio26/cbio-ai-curation-assistant/hermes_skills/curator-oncotree-consultation/search_oncotree_code.py`
 
    CLI pattern:
-   `python /home/cbio26/cbio-ai-curation-assistant/cbio_curator/hermes_skills/curator-oncotree-consultation/search_oncotree_code.py -q '<disease or subtype text>' --json`
+   `python /home/cbio26/cbio-ai-curation-assistant/hermes_skills/curator-oncotree-consultation/search_oncotree_code.py -q '<disease or subtype text>' --json`
 
    Example for cHCC-ICC studies:
-   `python /home/cbio26/cbio-ai-curation-assistant/cbio_curator/hermes_skills/curator-oncotree-consultation/search_oncotree_code.py -q 'combined hepatocellular and intrahepatic cholangiocarcinoma' --json`
+   `python /home/cbio26/cbio-ai-curation-assistant/hermes_skills/curator-oncotree-consultation/search_oncotree_code.py -q 'combined hepatocellular and intrahepatic cholangiocarcinoma' --json`
 
 2. Search using the original disease name, histology, diagnosis, cancer type, subtype, or other tumor classification information from the source data.
 

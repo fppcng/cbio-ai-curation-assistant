@@ -3,7 +3,7 @@ Generate a cBioPortal curation report from a local paper PDF or XML file and loc
 
 Example
 -------
-    python cbio_abstractor/hermes_skills/abstractor-curation-report-generation/scripts/abstractor_report_generator.py           --paper-xml /path/to/article.xml           --supp /path/to/supp_dir
+    python hermes_skills/abstractor-curation-report-generation/scripts/abstractor_report_generator.py           --paper-xml /path/to/article.xml           --supp /path/to/supp_dir
 """
 
 from __future__ import annotations
@@ -16,7 +16,8 @@ import sys
 from pathlib import Path
 from typing import Any, Sequence
 
-_MODULE_ROOT = Path(__file__).resolve().parents[3]
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_MODULE_ROOT = _REPO_ROOT / "cbio_abstractor"
 if str(_MODULE_ROOT) not in sys.path:
     sys.path.insert(0, str(_MODULE_ROOT))
 

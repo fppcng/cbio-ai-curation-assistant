@@ -20,7 +20,7 @@ Treat `/home/cbio26/cbio-ai-curation-assistant` as the repository root.
 1. Check whether `/home/cbio26/cbio-ai-curation-assistant/studies/<PMCID>/data/raw/manifest.json` already exists and still points to files that are present on disk.
 2. If the manifest and files are already present, reuse them and report that the study artifacts already existed locally.
 3. Otherwise run the repo's download script from the repo root using the project venv and an explicit import path override:
-   `PYTHONPATH=/home/cbio26/cbio-ai-curation-assistant/cbio_abstractor ./.venv/bin/python cbio_abstractor/hermes_skills/abstractor-study-download/scripts/abstractor_study_download.py <identifier> --studies-dir /home/cbio26/cbio-ai-curation-assistant/studies`
+   `PYTHONPATH=/home/cbio26/cbio-ai-curation-assistant/cbio_abstractor ./.venv/bin/python hermes_skills/abstractor-study-download/scripts/abstractor_study_download.py <identifier> --studies-dir /home/cbio26/cbio-ai-curation-assistant/studies`
 4. If you want the structured result payload preserved, also pass `--output-json /tmp/<pmcid>_download_result.json`.
 5. After the run, verify the manifest and the files on disk under `/home/cbio26/cbio-ai-curation-assistant/studies/<PMCID>/data/raw/`.
 
