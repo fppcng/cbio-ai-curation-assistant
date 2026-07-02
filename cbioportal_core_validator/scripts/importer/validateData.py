@@ -247,6 +247,250 @@ class Jinja2HtmlHandler(logging.handlers.BufferingHandler):
             f.write(doc)
 
 
+class JsonReportHandler(logging.handlers.BufferingHandler):
+
+    """Logging handler that writes the validation report as structured JSON."""
+
+    def __init__(self, study_dir, output_filename, *args, **kwargs):
+        """Initialize the JSON report handler.
+
+        Args:
+            study_dir: Path to the study directory being validated.
+            output_filename: Path where the JSON report should be written.
+            *args: Positional arguments passed to BufferingHandler.
+            **kwargs: Keyword arguments passed to BufferingHandler.
+        """
+        self.study_dir = study_dir
+        self.output_filename = output_filename
+        self.max_level = logging.NOTSET
+        self.closed = False
+        super(JsonReportHandler, self).__init__(*args, **kwargs)
+
+    def emit(self, record):
+        """Buffer a message if the buffer is not full.
+
+        Args:
+            record: Log record emitted by the validator.
+        """
+        self.max_level = max(self.max_level, record.levelno)
+        if len(self.buffer) < self.capacity:
+            return super(JsonReportHandler, self).emit(record)
+
+    def flush(self):
+        """Do nothing; emit() caps the buffer and generateJson() writes output."""
+        pass
+
+    def shouldFlush(self, record):
+        """Never flush automatically.
+
+        Args:
+            record: Log record emitted by the validator.
+
+        Returns:
+            False so the report is written only at the end.
+        """
+        return False
+
+    @staticmethod
+    def _json_safe(value):
+        """Convert a value from a log record to JSON-compatible data.
+
+        Args:
+            value: Value taken from a log record.
+
+        Returns:
+            A JSON-compatible representation of the value.
+        """
+        if value is None or isinstance(value, (str, int, float, bool)):
+            return value
+        if isinstance(value, (list, tuple)):
+            return [JsonReportHandler._json_safe(item) for item in value]
+        if isinstance(value, dict):
+            return {
+                str(key): JsonReportHandler._json_safe(item)
+                for key, item in value.items()
+            }
+        return str(value)
+
+    @staticmethod
+    def _record_level(record):
+        """Map a log record level to the report level used by the HTML report.
+
+        Args:
+            record: Log record emitted by the validator.
+
+        Returns:
+            The Bootstrap-style report level used by the HTML report.
+        """
+        if record.levelname in ('ERROR', 'CRITICAL'):
+            return 'danger'
+        if record.levelname == 'WARNING':
+            return 'warning'
+        if record.levelname == 'INFO':
+            return 'success'
+        return 'info'
+
+    @staticmethod
+    def _group_level(record_list):
+        """Map a group of records to the level used by the HTML report.
+
+        Args:
+            record_list: List of log records in one report group.
+
+        Returns:
+            The Bootstrap-style report level used by the HTML report.
+        """
+        level_names = [record.levelname for record in record_list]
+        if 'ERROR' in level_names or 'CRITICAL' in level_names:
+            return 'danger'
+        if 'WARNING' in level_names:
+            return 'warning'
+        if 'INFO' in level_names:
+            return 'success'
+        return 'info'
+
+    @staticmethod
+    def _validation_status(max_level):
+        """Map a maximum log level to the validation status from the HTML report.
+
+        Args:
+            max_level: Maximum log level name.
+
+        Returns:
+            Validation status text used by the HTML report.
+        """
+        if max_level in ('ERROR', 'CRITICAL'):
+            return 'Failed'
+        if max_level == 'WARNING':
+            return 'Please check'
+        if max_level == 'INFO':
+            return 'Success'
+        return 'Unknown'
+
+    @classmethod
+    def _limited_values(cls, values, max_values=3):
+        """Return a compact JSON representation for aggregated values.
+
+        Args:
+            values: Aggregated values from a log record.
+            max_values: Maximum number of values to include in the report.
+
+        Returns:
+            A dictionary with a truncated value list and count metadata.
+        """
+        values = list(values)
+        result = {
+            'values': cls._json_safe(values[:max_values]),
+            'total_count': len(values),
+        }
+        if len(values) > max_values:
+            result['truncated'] = True
+            result['omitted_count'] = len(values) - max_values
+        else:
+            result['truncated'] = False
+            result['omitted_count'] = 0
+        return result
+
+    @classmethod
+    def _field_value(cls, record, field_name):
+        """Extract a field and its compact aggregated form from a log record.
+
+        Args:
+            record: Log record emitted by the validator.
+            field_name: Base field name to extract.
+
+        Returns:
+            A dictionary with the single value or truncated aggregated values.
+        """
+        if hasattr(record, field_name):
+            return {'value': cls._json_safe(getattr(record, field_name))}
+        list_field_name = field_name + '_list'
+        if hasattr(record, list_field_name):
+            return cls._limited_values(getattr(record, list_field_name))
+        return {}
+
+    @classmethod
+    def _record_to_dict(cls, record):
+        """Serialize one log record with the same fields shown in the HTML table.
+
+        Args:
+            record: Log record emitted by the validator.
+
+        Returns:
+            A dictionary containing the structured record.
+        """
+        record_dict = {
+            'level': record.levelname,
+            'report_level': cls._record_level(record),
+            'message': record.getMessage(),
+        }
+        for field_name in (
+                'line_number',
+                'column_number',
+                'column_name'):
+            field_value = cls._field_value(record, field_name)
+            if field_value:
+                record_dict[field_name] = field_value
+
+        value_encountered = cls._field_value(record, 'cause')
+        if value_encountered:
+            record_dict['value_encountered'] = value_encountered
+        return record_dict
+
+    def _group_to_dict(self, filename, record_list):
+        """Serialize one file or general group as shown in the HTML report.
+
+        Args:
+            filename: Group name shown in the HTML report.
+            record_list: List of log records in the group.
+
+        Returns:
+            A dictionary containing the structured group.
+        """
+        return {
+            'filename': filename,
+            'report_level': self._group_level(record_list),
+            'record_count': len(record_list),
+            'records': [
+                self._record_to_dict(record)
+                for record in record_list
+            ],
+        }
+
+    def generateJson(self, **kwargs):
+        """Write the validation report as JSON.
+
+        Args:
+            **kwargs: Values such as cbio_version shared with the HTML report.
+        """
+        max_level = logging.getLevelName(self.max_level)
+        fileless_records = [
+            record for record in self.buffer
+            if not hasattr(record, 'filename_')
+        ]
+        file_records_by_name = OrderedDict()
+        for record in self.buffer:
+            if not hasattr(record, 'filename_'):
+                continue
+            filename = os.path.relpath(record.filename_.strip(),
+                                       self.study_dir)
+            file_records_by_name.setdefault(filename, []).append(record)
+
+        report = {
+            'study_dir': self.study_dir,
+            'cbio_version': kwargs.get('cbio_version'),
+            'max_level': max_level,
+            'validation_status': self._validation_status(max_level),
+            'groups': [self._group_to_dict('General', fileless_records)],
+        }
+        for filename, record_list in file_records_by_name.items():
+            report['groups'].append(self._group_to_dict(filename, record_list))
+
+        with open(self.output_filename, 'w') as f:
+            json.dump(report, f, indent=2, sort_keys=False)
+            f.write('\n')
+
+
 class ErrorFileFormatter(cbioportal_common.ValidationMessageFormatter):
 
     """Fasta-like formatter listing lines on which error messages occurred."""
@@ -5370,6 +5614,8 @@ def interface(args=None):
                                         'from the cBioPortal installation')
     parser.add_argument('-html', '--html_table', type=str, required=False,
                         help='path to html report output file')
+    parser.add_argument('-json', '--json_report', type=str, required=False,
+                        help='path to JSON report output file')
     parser.add_argument('-e', '--error_file', type=str, required=False,
                         help='File to which to write line numbers on which '
                              'errors were found, for scripts')
@@ -5649,6 +5895,7 @@ def main_validate(args):
     server_url = args.url_server
 
     html_output_filename = args.html_table
+    json_output_filename = args.json_report
     relaxed_mode = args.relaxed_clinical_definitions
     strict_maf_checks = args.strict_maf_checks
 
@@ -5675,6 +5922,8 @@ def main_validate(args):
 
     collapsing_html_handler = None
     html_handler = None
+    collapsing_json_handler = None
+    json_handler = None
     # add html table handler if applicable
     if html_output_filename:
         # just to make sure users get dependency error at start:
@@ -5692,6 +5941,19 @@ def main_validate(args):
             target=html_handler)
         collapsing_html_handler.setLevel(output_loglevel)
         logger.addHandler(collapsing_html_handler)
+
+    # add JSON report handler if applicable
+    if json_output_filename:
+        json_handler = JsonReportHandler(
+            data_dir,
+            json_output_filename,
+            capacity=1e5)
+        collapsing_json_handler = cbioportal_common.CollapsingLogMessageHandler(
+            capacity=5e5,
+            flushLevel=logging.CRITICAL,
+            target=json_handler)
+        collapsing_json_handler.setLevel(output_loglevel)
+        logger.addHandler(collapsing_json_handler)
 
     if args.error_file:
         errfile_handler = logging.FileHandler(args.error_file, 'w')
@@ -5738,6 +6000,10 @@ def main_validate(args):
         # flush logger and generate HTML while overriding cbio_version after retrieving it from the API
         collapsing_html_handler.flush()
         html_handler.generateHtml(cbio_version=cbio_version)
+
+    if json_handler is not None:
+        collapsing_json_handler.flush()
+        json_handler.generateJson(cbio_version=cbio_version)
 
     return exit_status_handler.get_exit_status()
 
