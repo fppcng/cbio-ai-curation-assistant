@@ -22,10 +22,9 @@ if str(_MODULE_ROOT) not in sys.path:
     sys.path.insert(0, str(_MODULE_ROOT))
 
 from cbioportal_curator import _analyse_supplementary_files, _extract_metadata_llm, _extract_pdf_text  # noqa: E402
-from cli_shared import build_required_llm_config, extract_xml_metadata_with_llm  # noqa: E402
+from cli_shared import build_optional_llm_config, extract_xml_metadata_with_llm  # noqa: E402
 from config import LLMConfig, get_provider_names  # noqa: E402
 from pdf_report import (  # noqa: E402
-    build_curation_report_filename,
     build_curation_report_json,
     save_curation_report_pdf,
 )
@@ -112,12 +111,16 @@ def _build_summary(meta: dict[str, Any], records: list[dict[str, Any]], supp_pat
 
 def _extract_pdf_metadata(
     paper_pdf_path: str,
-    llm_config: LLMConfig,
+    llm_config: LLMConfig | None,
     warnings: list[str],
 ) -> dict[str, Any]:
     pdf_text = _extract_pdf_text(paper_pdf_path)
     if not pdf_text.strip():
         warnings.append("Could not extract text from the PDF. Metadata fields will be blank.")
+        return {}
+
+    if llm_config is None:
+        warnings.append("No LLM configuration is available. PDF metadata fields will be blank.")
         return {}
 
     try:
@@ -128,9 +131,56 @@ def _extract_pdf_metadata(
         return {}
 
 
+def _build_report_stem(
+    meta: dict[str, Any],
+    summary: dict[str, Any],
+    study_root: Path | None,
+) -> str:
+    study_id = str(meta.get("study_id_suggestion") or "").strip()
+    if not study_id or study_id == "—":
+        study_id = str(summary.get("study_id") or "").strip()
+    if not study_id or study_id == "—":
+        study_id = study_root.name if study_root is not None else "cbioportal_curation"
+
+    stem = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in study_id).strip("._")
+    return (stem or "cbioportal_curation") + "_report"
+
+
+def _build_report_pdf_filename(
+    meta: dict[str, Any],
+    summary: dict[str, Any],
+    study_root: Path | None,
+) -> str:
+    return _build_report_stem(meta, summary, study_root) + ".pdf"
+
+
+def _build_report_json_filename(
+    meta: dict[str, Any],
+    summary: dict[str, Any],
+    study_root: Path | None,
+) -> str:
+    return _build_report_stem(meta, summary, study_root) + ".json"
+
+
+def _infer_study_root(paths: Sequence[str | Path]) -> Path | None:
+    study_roots: set[Path] = set()
+
+    for raw_path in paths:
+        candidate = Path(raw_path).expanduser().resolve()
+        for ancestor in (candidate, *candidate.parents):
+            if ancestor.parent.name == "studies":
+                study_roots.add(ancestor)
+                break
+
+    if len(study_roots) == 1:
+        return next(iter(study_roots))
+    return None
+
+
 def _resolve_output_pdf_path(
     output_pdf_path: str | None,
     output_dir: str | None,
+    study_root: Path | None,
     meta: dict[str, Any],
     summary: dict[str, Any],
 ) -> str | None:
@@ -138,8 +188,37 @@ def _resolve_output_pdf_path(
         return str(Path(output_pdf_path).expanduser().resolve())
     if output_dir:
         directory = Path(output_dir).expanduser().resolve()
-        return str(directory / build_curation_report_filename(meta, summary))
+        return str(directory / _build_report_pdf_filename(meta, summary, study_root))
+    if study_root is not None:
+        return str((study_root / "reports" / _build_report_pdf_filename(meta, summary, study_root)).resolve())
     return None
+
+
+def _resolve_output_json_path(
+    output_json_path: str | None,
+    output_pdf_path: str | None,
+    output_dir: str | None,
+    study_root: Path | None,
+    meta: dict[str, Any],
+    summary: dict[str, Any],
+) -> str | None:
+    if output_json_path:
+        return str(Path(output_json_path).expanduser().resolve())
+    if output_pdf_path:
+        return str(Path(output_pdf_path).with_suffix(".json").resolve())
+    if output_dir:
+        directory = Path(output_dir).expanduser().resolve()
+        return str((directory / _build_report_json_filename(meta, summary, study_root)).resolve())
+    if study_root is not None:
+        return str((study_root / "reports" / _build_report_json_filename(meta, summary, study_root)).resolve())
+    return None
+
+
+def _write_json(path: str | Path, payload: dict[str, Any]) -> str:
+    destination = Path(path).expanduser().resolve()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + os.linesep, encoding="utf-8")
+    return str(destination)
 
 
 def run_curation_orchestrator(
@@ -157,6 +236,7 @@ def run_curation_orchestrator(
     generate_pdf: bool = True,
     output_pdf_path: str | None = None,
     output_dir: str | None = None,
+    output_json_path: str | None = None,
 ) -> dict[str, Any]:
     """
     Run the local curation report workflow.
@@ -172,7 +252,7 @@ def run_curation_orchestrator(
     if sum(selected_sources) != 1:
         raise ValueError("Provide exactly one of: paper_pdf_path or paper_xml_path.")
 
-    resolved_llm_config = llm_config or build_required_llm_config(
+    resolved_llm_config = llm_config or build_optional_llm_config(
         provider=provider,
         api_key=api_key,
         model=model,
@@ -223,15 +303,27 @@ def run_curation_orchestrator(
             "supplementary_paths": supp_paths,
         }
 
+    study_root = _infer_study_root([paper_path, *supp_paths])
+
     records = _analyse_supplementary_files(supp_paths)
     summary = _build_summary(meta, records, supp_paths)
 
+    resolved_output_pdf_path = _resolve_output_pdf_path(output_pdf_path, output_dir, study_root, meta, summary)
+    resolved_output_json_path = _resolve_output_json_path(
+        output_json_path=output_json_path,
+        output_pdf_path=resolved_output_pdf_path if generate_pdf else None,
+        output_dir=output_dir,
+        study_root=study_root,
+        meta=meta,
+        summary=summary,
+    )
+
     pdf_path: str | None = None
     if generate_pdf:
-        resolved_output_pdf_path = _resolve_output_pdf_path(output_pdf_path, output_dir, meta, summary)
         pdf_path = save_curation_report_pdf(meta, summary, resolved_output_pdf_path)
 
     report = build_curation_report_json(meta, summary)
+    report_json_path = _write_json(resolved_output_json_path, report) if resolved_output_json_path else None
 
     return {
         "report": report,
@@ -239,13 +331,16 @@ def run_curation_orchestrator(
         "records": records,
         "summary": summary,
         "pdf_path": pdf_path,
+        "report_json_path": report_json_path,
+        "study_root": str(study_root) if study_root is not None else None,
         "warnings": warnings,
         "inputs": inputs,
         "llm": {
-            "provider": resolved_llm_config.provider,
-            "model": resolved_llm_config.model,
-            "api_mode": resolved_llm_config.api_mode,
-            "base_url": resolved_llm_config.base_url,
+            "enabled": resolved_llm_config is not None,
+            "provider": resolved_llm_config.provider if resolved_llm_config else None,
+            "model": resolved_llm_config.model if resolved_llm_config else None,
+            "api_mode": resolved_llm_config.api_mode if resolved_llm_config else None,
+            "base_url": resolved_llm_config.base_url if resolved_llm_config else None,
         },
     }
 
@@ -274,7 +369,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--provider",
         choices=list(get_provider_names()),
-        help="LLM provider. Defaults to the first configured provider, otherwise OpenAI.",
+        help="LLM provider. When omitted, the script uses the first configured provider if available.",
     )
     parser.add_argument("--api-key", help="Override the provider API key.")
     parser.add_argument("--model", help="Override the provider model.")
@@ -283,11 +378,11 @@ def _build_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--output-pdf",
-        help="Full output path for the generated PDF report.",
+        help="Full output path for the generated PDF report. When omitted, the script prefers studies/<PMCID>/reports/<study_id>_report.pdf if it can infer a unique study root.",
     )
     parser.add_argument(
         "--output-dir",
-        help="Directory where the PDF report should be created if --output-pdf is not set.",
+        help="Directory where the PDF and JSON reports should be created if --output-pdf is not set.",
     )
     parser.add_argument(
         "--no-pdf",
@@ -296,7 +391,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--output-json",
-        help="Optional file path where the cBioPortal curation report JSON will be written.",
+        help="Optional file path where the cBioPortal curation report JSON will be written. When omitted, the script persists JSON automatically as <study_id>_report.json when an output PDF path, output directory, or unique study root is available.",
     )
     parser.add_argument(
         "--log-level",
@@ -331,17 +426,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             generate_pdf=not args.no_pdf,
             output_pdf_path=args.output_pdf,
             output_dir=args.output_dir,
+            output_json_path=args.output_json,
         )
     except Exception as exc:
         logger.error("%s", exc)
         return 1
 
     rendered = json.dumps(result["report"], indent=2, ensure_ascii=False)
-    if args.output_json:
-        output_json_path = Path(args.output_json).expanduser().resolve()
-        output_json_path.parent.mkdir(parents=True, exist_ok=True)
-        output_json_path.write_text(rendered + os.linesep, encoding="utf-8")
-
     print(rendered)
     return 0
 

@@ -1,80 +1,63 @@
 ---
 name: abstractor-curation-report-generation
-description: Generate a cBioPortal curation report PDF from a local paper PDF or XML file and a user-approved subset of local supplementary files using the local cbio_abstractor workspace.
+description: Use this skill when asked to generate or regenerate a cBioPortal curation report PDF from local paper XML/PDF inputs and a chosen set of local supplementary files, using the repository deterministic report-generation script.
 ---
 
-## When to use
-Use this skill when the user asks to generate a cBioPortal curation report for a study and local study artifacts may be available.
+# cBioPortal curation report generation
 
-## Preconditions
-- The local `cbio_abstractor` code is available under `/home/cbio26/cbio-ai-curation-assistant/cbio_abstractor`.
-- A local paper PDF or XML file can be found.
-- The study directory already exists under `/home/cbio26/cbio-ai-curation-assistant/studies/<PMCID>/`.
-- Python dependencies are installed.
+## When to use
+Use this skill when the user asks to generate or regenerate a cBioPortal curation report from local study artifacts that already exist on disk.
+
+## Core rules
+- Never invent paper or supplementary paths. Use only files that exist locally.
+- Pass exactly one paper source to the script: `--paper-pdf` or `--paper-xml`.
+- Use only the supplementary files the user requested or approved.
+- Save report artifacts under `/home/cbio26/cbio-ai-curation-assistant/studies/<PMCID>/reports/` whenever the inputs belong to a single study, using recognizable default names like `<study_id>_report.pdf` and `<study_id>_report.json`.
+- Use LLM-backed metadata extraction when configuration is available; otherwise allow the script to fall back deterministically without LLM.
+- It is acceptable to return or attach the generated PDF to the user when the run succeeds.
 
 ## Path anchor
 Treat `/home/cbio26/cbio-ai-curation-assistant` as the repository root.
 
-When running Python code, prefer `/home/cbio26/cbio-ai-curation-assistant/cbio_abstractor` as the working directory so the local imports resolve correctly.
-
-## Core rule
-Never run report generation on all discovered supplementary files by default when multiple candidate files are present.
-
 ## Workflow
-1. Locate the local paper PDF or XML file and candidate supplementary files.
-   - If a local manifest already exists for the study, use it as the source of truth for article XML/PDF paths and supplementary-file paths instead of reconstructing them manually.
-2. Show the user the candidate supplementary files as a numbered list.
-3. For each file, provide:
-   - file number
-   - filename
-   - path if useful
-4. Ask the user which files to use for curation.
-5. Accept either:
-   - a list of file numbers
-   - `use recommended`
-6. Create or reuse:
-   - `/home/cbio26/cbio-ai-curation-assistant/studies/<PMCID>/curation-report/`
-7. Do not continue until the user confirms the subset, unless there is only one clearly relevant supplementary file and the user has already implicitly requested execution.
-8. If the user already approved a specific supplementary-file subset earlier in the same active thread, you may reuse that approval on repeated "generate/regenerate the report" requests instead of asking again. Restate the reused selection when you report the run.
-9. Always aim to send the complete pdf file, with all the metadata, when possible.
-10. Run `curation_workflow.run_local_curation_workflow(...)` using only the user-approved supplementary file paths.
-11. Pass:
-   - `supplementary_paths`
-   - `generate_pdf=True`
-   - `output_pdf_path` set to a deterministic location under `/home/cbio26/cbio-ai-curation-assistant/studies/<PMCID>/curation-report/`
-   - prefer a stable filename that encodes the study identifier and the chosen source/subset when useful (for example `<PMCID>_curation_report_xml_sup3.pdf`)
-   - LLM config only if available
-12. Pass exactly one paper source:
-   - `paper_pdf_path` when the source file is a PDF
-   - `paper_xml_path` when the source file is an XML file
-   - If the user explicitly asks to use the XML file for metadata, prefer `paper_xml_path` and do not also pass the PDF path.
-13. If you are regenerating a report into an existing deterministic path, treat the new file as a fresh artifact:
-   - rerun the workflow
-   - recompute the current file hash/size after the run
-   - report the current values instead of reusing older verification
-   - expect byte-level hashes to differ across reruns even when inputs are unchanged
-14. Collect:
-   - `pdf_path`
-   - `summary`
-   - `warnings`
-15. Always send or attach the generated PDF file to the user, not only the path.
+1. Locate the local paper source and the supplementary files that should be included.
+2. If the user provided only a PMID or PMCID and no local study artifacts exist yet, report that the required local inputs are missing.
+3. Treat `/home/cbio26/cbio-ai-curation-assistant/studies/<PMCID>/reports/` as the canonical report directory for the study.
+4. Run the repository report-generation script from the repo root using the project venv and an explicit import path override:
+   `PYTHONPATH=/home/cbio26/cbio-ai-curation-assistant/cbio_abstractor ./.venv/bin/python hermes_skills/abstractor-curation-report-generation/scripts/abstractor_report_generator.py --paper-xml <paper_xml_path> --supp <supp_path_1> <supp_path_2>`
+5. When a supplementary input is a directory and recursive discovery is required, also pass `--recursive-supp`.
+6. When the paper source is a PDF, use `--paper-pdf` instead of `--paper-xml`.
+7. If the script cannot infer a unique study root from the paper and supplementary paths, pass `--output-dir /home/cbio26/cbio-ai-curation-assistant/studies/<PMCID>/reports` explicitly.
+8. If you need a fixed PDF filename, pass `--output-pdf <absolute_pdf_path>` inside the study `reports/` directory.
+9. If you need a fixed JSON filename, pass `--output-json <absolute_json_path>` inside the study `reports/` directory.
+10. After the run, verify the generated PDF and JSON paths on disk.
 
-## User interaction format
-When multiple supplementary files are found, always show them to the user before running the workflow.
+## What the abstractor_report_generator.py script owns
+The script deterministically handles:
+- validation that exactly one paper source was provided
+- supplementary path expansion and filtering of supported file types
+- local paper path resolution
+- LLM config detection when provider settings are available
+- fallback to non-LLM metadata handling when no usable LLM config is available or completion fails
+- metadata extraction from the paper source
+- supplementary-file analysis
+- curation summary construction
+- default PDF and JSON path resolution under `studies/<PMCID>/reports/` with recognizable names like `<study_id>_report.pdf` and `<study_id>_report.json` when a unique study root can be inferred
+- PDF generation when PDF output is enabled
+- JSON report rendering and persistence when an output location is available
 
-Use a numbered list like:
+Do not restate those implementation details in agent reasoning unless they are directly relevant to a failure or debugging step.
 
-1. `Supplementary_Table_1.xlsx`
-2. `Figure_S1.pdf`
-3. `Supplementary_Methods.docx`
-
-Then ask:
-`Reply with the file numbers to include.`
+## Reporting requirements
+- Report which paper source was used and whether it was XML or PDF.
+- Report the supplementary files actually passed to the script.
+- Report whether LLM metadata extraction was enabled or skipped.
+- Report the generated PDF path and JSON path.
+- Surface warnings returned by the script instead of claiming a clean run.
+- If the task was successful and a PDF was generated, it is fine to return or attach the PDF to the user.
 
 ## Important limits
 - This workflow does not fetch files from PMID or PMCID by itself.
-- If only a PMID or PMCID is provided and no local study artifacts exist, report that the required input files are missing.
-- Do not use Streamlit for report generation.
-- Do not include supplementary files that were not approved by the user.
-- Do not pass both `paper_pdf_path` and `paper_xml_path` in the same workflow call.
-- Always send the pdf if the task was successful.
+- Do not pass both `--paper-pdf` and `--paper-xml` in the same run.
+- Do not claim success for a PDF or JSON file that is not present on disk.
+- Do not include supplementary files that were not requested or approved by the user.
