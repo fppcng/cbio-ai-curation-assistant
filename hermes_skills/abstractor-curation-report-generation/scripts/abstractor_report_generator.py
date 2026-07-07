@@ -3,7 +3,9 @@ Generate a cBioPortal curation report from a local paper PDF or XML file and loc
 
 Example
 -------
-    python hermes_skills/abstractor-curation-report-generation/scripts/abstractor_report_generator.py           --paper-xml /path/to/article.xml           --supp /path/to/supp_dir
+    python hermes_skills/abstractor-curation-report-generation/scripts/abstractor_report_generator.py \
+        --paper-xml /path/to/article.xml \
+        --supp /path/to/supp_dir
 """
 
 from __future__ import annotations
@@ -16,14 +18,34 @@ import sys
 from pathlib import Path
 from typing import Any, Sequence
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+_REPO_ROOT_ENV = "CBIO_ASSISTANT_REPO_ROOT"
+
+
+def _get_repo_root() -> Path:
+    raw_repo_root = os.environ.get(_REPO_ROOT_ENV)
+    if not raw_repo_root:
+        raise RuntimeError(
+            f"Missing required environment variable {_REPO_ROOT_ENV}. "
+            "Make sure Hermes loaded its environment before running this script."
+        )
+
+    repo_root = Path(raw_repo_root).expanduser().resolve()
+    if not repo_root.is_dir():
+        raise RuntimeError(
+            f"{_REPO_ROOT_ENV} does not point to an existing directory: {repo_root}"
+        )
+
+    return repo_root
+
+
+_REPO_ROOT = _get_repo_root()
 _MODULE_ROOT = _REPO_ROOT / "cbio_abstractor"
 if str(_MODULE_ROOT) not in sys.path:
     sys.path.insert(0, str(_MODULE_ROOT))
 
 from cbioportal_curator import _analyse_supplementary_files, _extract_metadata_llm, _extract_pdf_text  # noqa: E402
-from cli_shared import build_optional_llm_config, extract_xml_metadata_with_llm  # noqa: E402
-from config import LLMConfig, get_provider_names  # noqa: E402
+from cli_shared import extract_xml_metadata_with_llm  # noqa: E402
+from config import LLMConfig, PROVIDER_SPECS, get_provider_default_config, get_provider_names  # noqa: E402
 from pdf_report import (  # noqa: E402
     build_curation_report_json,
     save_curation_report_pdf,
@@ -31,6 +53,104 @@ from pdf_report import (  # noqa: E402
 from pmc_supplement_fetcher import SUPPORTED_SUPPLEMENT_EXTENSIONS  # noqa: E402
 
 logger = logging.getLogger(__name__)
+
+_LLM_DISCOVERY_ORDER = ("LiteLLM", "OpenAI", "Anthropic")
+
+
+def _load_llm_env_value(env_name: str | None, default: str = "") -> str:
+    if not env_name:
+        return default
+    return os.environ.get(env_name, "").strip() or default
+
+
+def _build_skill_llm_config(
+    provider: str,
+    *,
+    api_key: str | None = None,
+    model: str | None = None,
+    base_url: str | None = None,
+    api_mode: str | None = None,
+) -> LLMConfig:
+    defaults = get_provider_default_config(
+        provider,
+        value_loader=lambda env_name, default="": _load_llm_env_value(env_name, default),
+    )
+    spec = PROVIDER_SPECS[provider]
+    resolved_api_mode = defaults.api_mode if api_mode is None else (api_mode or "").strip().lower()
+    return LLMConfig(
+        provider=provider,
+        api_key=(defaults.api_key if api_key is None else api_key).strip(),
+        model=(defaults.model if model is None else model).strip() or defaults.model,
+        base_url=(defaults.base_url if base_url is None else base_url).strip(),
+        api_mode=resolved_api_mode or spec.default_api_mode,
+    )
+
+
+def _is_complete_llm_config(config: LLMConfig) -> bool:
+    spec = PROVIDER_SPECS[config.provider]
+    if spec.requires_api_key and not config.api_key:
+        return False
+    if config.provider == "LiteLLM" and not config.base_url:
+        return False
+    return bool(config.model)
+
+
+def _require_complete_llm_config(config: LLMConfig) -> None:
+    spec = PROVIDER_SPECS[config.provider]
+    if config.provider == "LiteLLM" and not config.base_url:
+        raise ValueError(f"Please set {spec.base_url_env} in the Hermes environment or pass --base-url.")
+    if spec.requires_api_key and not config.api_key:
+        raise ValueError(f"Please set {spec.api_key_env} in the Hermes environment or pass --api-key.")
+    if not config.model:
+        raise ValueError(f"Please choose a model for {config.provider}.")
+
+
+def _auto_select_llm_provider() -> str | None:
+    available_providers = set(get_provider_names())
+    for provider in _LLM_DISCOVERY_ORDER:
+        if provider not in available_providers:
+            continue
+        config = _build_skill_llm_config(provider)
+        if _is_complete_llm_config(config):
+            return provider
+    return None
+
+
+def _resolve_skill_llm_config(
+    *,
+    provider: str | None,
+    api_key: str | None,
+    model: str | None,
+    base_url: str | None,
+    api_mode: str | None,
+) -> LLMConfig | None:
+    has_explicit_overrides = any(value is not None for value in (provider, api_key, model, base_url, api_mode))
+    resolved_provider = provider or _auto_select_llm_provider()
+
+    if resolved_provider is None:
+        if has_explicit_overrides:
+            raise ValueError(
+                "No complete LLM configuration was found in the Hermes environment. "
+                "Pass --provider with a complete override."
+            )
+        return None
+
+    config = _build_skill_llm_config(
+        resolved_provider,
+        api_key=api_key,
+        model=model,
+        base_url=base_url,
+        api_mode=api_mode,
+    )
+
+    if has_explicit_overrides:
+        _require_complete_llm_config(config)
+        return config
+
+    if provider is None:
+        logger.info("Auto-selected LLM provider from environment: %s", resolved_provider)
+
+    return config if _is_complete_llm_config(config) else None
 
 
 def _is_supported_supplementary_file(path: Path) -> bool:
@@ -252,7 +372,7 @@ def run_curation_orchestrator(
     if sum(selected_sources) != 1:
         raise ValueError("Provide exactly one of: paper_pdf_path or paper_xml_path.")
 
-    resolved_llm_config = llm_config or build_optional_llm_config(
+    resolved_llm_config = llm_config or _resolve_skill_llm_config(
         provider=provider,
         api_key=api_key,
         model=model,
@@ -369,7 +489,10 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--provider",
         choices=list(get_provider_names()),
-        help="LLM provider. When omitted, the script uses the first configured provider if available.",
+        help=(
+            "LLM provider. When omitted, the script auto-selects the first complete provider "
+            "from the Hermes environment in this order: LiteLLM, OpenAI, Anthropic."
+        ),
     )
     parser.add_argument("--api-key", help="Override the provider API key.")
     parser.add_argument("--model", help="Override the provider model.")
@@ -378,7 +501,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--output-pdf",
-        help="Full output path for the generated PDF report. When omitted, the script prefers studies/<PMCID>/reports/<study_id>_report.pdf if it can infer a unique study root.",
+        help=(
+            "Full output path for the generated PDF report. When omitted, the script prefers "
+            "studies/<PMCID>/reports/<study_id>_report.pdf if it can infer a unique study root."
+        ),
     )
     parser.add_argument(
         "--output-dir",
@@ -391,7 +517,11 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--output-json",
-        help="Optional file path where the cBioPortal curation report JSON will be written. When omitted, the script persists JSON automatically as <study_id>_report.json when an output PDF path, output directory, or unique study root is available.",
+        help=(
+            "Optional file path where the cBioPortal curation report JSON will be written. "
+            "When omitted, the script persists JSON automatically as <study_id>_report.json "
+            "when an output PDF path, output directory, or unique study root is available."
+        ),
     )
     parser.add_argument(
         "--log-level",

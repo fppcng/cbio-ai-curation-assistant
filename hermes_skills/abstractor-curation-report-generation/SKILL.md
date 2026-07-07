@@ -8,41 +8,58 @@ description: Use this skill when asked to generate or regenerate a cBioPortal cu
 ## When to use
 Use this skill when the user asks to generate or regenerate a cBioPortal curation report from local study artifacts that already exist on disk.
 
+## Prerequisites - Environment verification
+
+Before running the workflow, verify that the Hermes environment has loaded the required repository root.
+
+Run:
+
+test -n "$CBIO_ASSISTANT_REPO_ROOT"
+test -d "$CBIO_ASSISTANT_REPO_ROOT"
+test -x "$CBIO_ASSISTANT_REPO_ROOT/.venv/bin/python"
+
+printf 'CBIO_ASSISTANT_REPO_ROOT=%s\n' "$CBIO_ASSISTANT_REPO_ROOT"
+
+If any check fails, stop and report that the Hermes environment was not loaded correctly or that CBIO_ASSISTANT_REPO_ROOT does not point to a valid repository.
+
 ## Core rules
 - Never invent paper or supplementary paths. Use only files that exist locally.
 - Pass exactly one paper source to the script: `--paper-pdf` or `--paper-xml`.
-- Use only the supplementary files the user requested or approved.
-- Save report artifacts under `/home/cbio26/cbio-ai-curation-assistant/studies/<PMCID>/reports/` whenever the inputs belong to a single study, using recognizable default names like `<study_id>_report.pdf` and `<study_id>_report.json`.
+- Save report artifacts under `$CBIO_ASSISTANT_REPO_ROOT/studies/<PMCID>/reports/` whenever the inputs belong to a single study, using recognizable default names like `<study_id>_report.pdf` and `<study_id>_report.json`.
 - Use LLM-backed metadata extraction when configuration is available; otherwise allow the script to fall back deterministically without LLM.
 - It is acceptable to return or attach the generated PDF to the user when the run succeeds.
-
-## Path anchor
-Treat `/home/cbio26/cbio-ai-curation-assistant` as the repository root.
 
 ## Workflow
 1. Locate the local paper source and the supplementary files that should be included.
 2. If the user provided only a PMID or PMCID and no local study artifacts exist yet, report that the required local inputs are missing.
-3. Treat `/home/cbio26/cbio-ai-curation-assistant/studies/<PMCID>/reports/` as the canonical report directory for the study.
-4. Run the repository report-generation script from the repo root using the project venv and an explicit import path override:
-   `PYTHONPATH=/home/cbio26/cbio-ai-curation-assistant/cbio_abstractor ./.venv/bin/python hermes_skills/abstractor-curation-report-generation/scripts/abstractor_report_generator.py --paper-xml <paper_xml_path> --supp <supp_path_1> <supp_path_2>`
-5. When a supplementary input is a directory and recursive discovery is required, also pass `--recursive-supp`.
-6. When the paper source is a PDF, use `--paper-pdf` instead of `--paper-xml`.
-7. If the script cannot infer a unique study root from the paper and supplementary paths, pass `--output-dir /home/cbio26/cbio-ai-curation-assistant/studies/<PMCID>/reports` explicitly.
-8. If you need a fixed PDF filename, pass `--output-pdf <absolute_pdf_path>` inside the study `reports/` directory.
-9. If you need a fixed JSON filename, pass `--output-json <absolute_json_path>` inside the study `reports/` directory.
-10. After the run, verify the generated PDF and JSON paths on disk.
+3. Treat `$CBIO_ASSISTANT_REPO_ROOT/studies/<PMCID>/reports/` as the canonical report directory for the study.
+4. Run the repository report-generation script from the repo root using the project virtual environment:
+cd "$CBIO_ASSISTANT_REPO_ROOT"
+`"$CBIO_ASSISTANT_REPO_ROOT/.venv/bin/python" \`
+  `hermes_skills/abstractor-curation-report-generation/scripts/abstractor_report_generator.py \`
+  `--paper-xml <paper_xml_path> \`
+  `--supp <supp_path_1> <supp_path_2>`
+6. When a supplementary input is a directory and recursive discovery is required, also pass `--recursive-supp`.
+7. When the paper source is a PDF, use `--paper-pdf` instead of `--paper-xml`.
+8. If the script cannot infer a unique study root from the paper and supplementary paths, pass `--output-dir /home/cbio26/cbio-ai-curation-assistant/studies/<PMCID>/reports` explicitly.
+9. If you need a fixed PDF filename, pass `--output-pdf` with an absolute path inside the study reports/ directory:
+`--output-pdf "$CBIO_ASSISTANT_REPO_ROOT/studies/<PMCID>/reports/<study_id>_report.pdf"`
+10. If you need a fixed JSON filename, pass `--output-json` with an absolute path inside the study reports/ directory:
+`--output-json "$CBIO_ASSISTANT_REPO_ROOT/studies/<PMCID>/reports/<study_id>_repo`
+11. After the run, verify the generated PDF and JSON paths on disk.
 
 ## What the abstractor_report_generator.py script owns
 The script deterministically handles:
+
 - validation that exactly one paper source was provided
 - supplementary path expansion and filtering of supported file types
 - local paper path resolution
-- LLM config detection when provider settings are available
+- LLM config detection from the process environment when provider settings are available
 - fallback to non-LLM metadata handling when no usable LLM config is available or completion fails
 - metadata extraction from the paper source
 - supplementary-file analysis
 - curation summary construction
-- default PDF and JSON path resolution under `studies/<PMCID>/reports/` with recognizable names like `<study_id>_report.pdf` and `<study_id>_report.json` when a unique study root can be inferred
+- default PDF and JSON path resolution under `studies/<PMCID>/reports/ with recognizable names like <study_id>_report.pdf` and `<study_id>_report.json` when a unique study root can be inferred
 - PDF generation when PDF output is enabled
 - JSON report rendering and persistence when an output location is available
 
