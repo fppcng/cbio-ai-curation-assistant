@@ -11,6 +11,7 @@ Example
 from __future__ import annotations
 
 import argparse
+import collections
 import json
 import logging
 import os
@@ -201,6 +202,7 @@ def _expand_supplementary_paths(
 
 
 def _build_summary(meta: dict[str, Any], records: list[dict[str, Any]], supp_paths: Sequence[str]) -> dict[str, Any]:
+    breakdown = _build_report_breakdown(records)
     return {
         "study_id": meta.get("study_id_suggestion") or "—",
         "cancer_type": meta.get("cancer_type") or "—",
@@ -208,25 +210,103 @@ def _build_summary(meta: dict[str, Any], records: list[dict[str, Any]], supp_pat
         "reference_genome": meta.get("reference_genome") or "—",
         "files_analysed": len(supp_paths),
         "sheets_analysed": len(records),
-        "high_priority": sum(1 for row in records if row.get("priority") == "HIGH"),
-        "medium_priority": sum(1 for row in records if row.get("priority") == "MEDIUM"),
-        "not_loadable": sum(1 for row in records if row.get("curability") == "NO"),
-        "file_breakdown": [
-            {
-                "file": row.get("file", "—"),
-                "sheet": row.get("sheet", "—"),
-                "cbio_format": row.get("cbio_target_file", "—"),
-                "curability": row.get("curability", "NO"),
-                "priority": row.get("priority", "N/A"),
-                "confidence": row.get("confidence", 0),
-                "verdict": row.get("verdict", ""),
-                "req_present": row.get("required_present", []),
-                "req_missing": row.get("required_missing", []),
-                "opt_present": row.get("optional_present", []),
-            }
-            for row in records
-        ],
+        "high_priority": _count_records_by_value(records, "priority", "HIGH"),
+        "medium_priority": _count_records_by_value(records, "priority", "MEDIUM"),
+        "not_loadable": _count_records_by_value(records, "curability", "NO"),
+        "file_breakdown": breakdown,
     }
+
+
+def _count_records_by_value(
+    records: Sequence[dict[str, Any]],
+    field_name: str,
+    expected_value: str,
+) -> int:
+    expected = expected_value.upper()
+    return sum(
+        1
+        for row in records
+        if str(row.get(field_name, "") or "").strip().upper() == expected
+    )
+
+
+def _build_report_breakdown(records: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    pdf_rows_by_file: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
+    for row in records:
+        file_name = str(row.get("file", "") or "")
+        if file_name.lower().endswith(".pdf"):
+            pdf_rows_by_file[file_name].append(row)
+
+    manual_pdf_rows_by_file = {
+        file_name: [row for row in rows if str(row.get("curability", "")).upper() == "NO"]
+        for file_name, rows in pdf_rows_by_file.items()
+    }
+    aggregated_pdf_files = {
+        file_name for file_name, rows in manual_pdf_rows_by_file.items() if rows
+    }
+
+    breakdown: list[dict[str, Any]] = []
+    emitted_pdf_files: set[str] = set()
+    for row in records:
+        file_name = str(row.get("file", "—") or "—")
+        is_manual_pdf_row = str(row.get("curability", "")).upper() == "NO"
+        if file_name in aggregated_pdf_files and is_manual_pdf_row:
+            if file_name in emitted_pdf_files:
+                continue
+            breakdown.append(_build_aggregated_pdf_breakdown_row(manual_pdf_rows_by_file[file_name]))
+            emitted_pdf_files.add(file_name)
+            continue
+        breakdown.append(_build_breakdown_row(row))
+
+    return breakdown
+
+
+def _build_breakdown_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "file": row.get("file", "—"),
+        "sheet": row.get("sheet", "—"),
+        "cbio_format": row.get("cbio_target_file", "—"),
+        "curability": row.get("curability", "NO"),
+        "priority": row.get("priority", "N/A"),
+        "confidence": row.get("confidence", 0),
+        "verdict": row.get("verdict", ""),
+        "req_present": row.get("required_present", []),
+        "req_missing": row.get("required_missing", []),
+        "opt_present": row.get("optional_present", []),
+    }
+
+
+def _build_aggregated_pdf_breakdown_row(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    first_row = rows[0]
+    return {
+        "file": first_row.get("file", "—"),
+        "sheet": f"PDF (aggregated {len(rows)} sections)",
+        "cbio_format": "Not directly loadable",
+        "curability": "NO",
+        "priority": "N/A",
+        "confidence": max(float(row.get("confidence", 0) or 0) for row in rows),
+        "verdict": (
+            f"Aggregated {len(rows)} PDF sections that require manual intervention."
+            if len(rows) > 1
+            else first_row.get("verdict", "")
+        ),
+        "req_present": _merge_breakdown_values(rows, "required_present"),
+        "req_missing": _merge_breakdown_values(rows, "required_missing"),
+        "opt_present": _merge_breakdown_values(rows, "optional_present"),
+    }
+
+
+def _merge_breakdown_values(rows: Sequence[dict[str, Any]], key: str) -> list[str]:
+    values: list[str] = []
+    seen: set[str] = set()
+    for row in rows:
+        for value in row.get(key, []) or []:
+            text = str(value).strip()
+            if not text or text in seen:
+                continue
+            seen.add(text)
+            values.append(text)
+    return values
 
 
 def _extract_pdf_metadata(
