@@ -46,9 +46,12 @@ if str(_MODULE_ROOT) not in sys.path:
     sys.path.insert(0, str(_MODULE_ROOT))
 
 from pmc_supplement_fetcher import (  # noqa: E402
+    PMCRequestError,
     SUPPORTED_SUPPLEMENT_EXTENSIONS,
+    _article_pdf_url_from_article_html,
     _download_url,
     _extract_supported_files,
+    _fetch_pmc_article_html,
     _fetch_pmc_xml,
     _oa_package_url,
     download_pmc_supplements,
@@ -88,6 +91,12 @@ def _load_download_path_config() -> DownloadPathConfig:
 def _write_json(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + os.linesep, encoding="utf-8")
+
+
+def _format_pmc_error(exc: PMCRequestError) -> str:
+    if exc.status_code is not None:
+        return f"{exc.category} (HTTP {exc.status_code}): {exc.detail}"
+    return f"{exc.category}: {exc.detail}"
 
 
 def _article_pdf_name(pmcid: str) -> str:
@@ -148,6 +157,14 @@ def _ensure_supplementary_files(
             identifier_type="PMCID",
             output_dir=str(supplementary_dir),
         )
+    except PMCRequestError as exc:
+        existing = _list_existing_supplements(supplementary_dir, pmcid)
+        detail = _format_pmc_error(exc)
+        if existing:
+            warnings.append(f"Supplementary download completed partially: {detail}")
+            return existing, False
+        warnings.append(f"Supplementary download failed: {detail}")
+        return [], False
     except Exception as exc:
         existing = _list_existing_supplements(supplementary_dir, pmcid)
         if existing:
@@ -174,10 +191,36 @@ def _ensure_article_pdf(
         shutil.copy2(supplemental_copy, article_pdf_path)
         return article_pdf_path.resolve(), False
 
-    package_url = _oa_package_url(pmcid)
-    if not package_url:
-        warnings.append("PMC OA package is not available. Article PDF was not downloaded.")
+    try:
+        package_url = _oa_package_url(pmcid)
+    except PMCRequestError as exc:
+        warnings.append(f"Article PDF lookup failed: {_format_pmc_error(exc)}")
         return None, False
+
+    if not package_url:
+        try:
+            article_html = _fetch_pmc_article_html(pmcid)
+            direct_pdf_url = _article_pdf_url_from_article_html(pmcid, article_html)
+        except PMCRequestError as exc:
+            warnings.append(f"Article PDF lookup failed: {_format_pmc_error(exc)}")
+            return None, False
+
+        if not direct_pdf_url:
+            warnings.append("PMC OA package is not available. Article PDF was not downloaded.")
+            return None, False
+
+        try:
+            with tempfile.TemporaryDirectory(prefix=f"{normalize_pmcid(pmcid).lower()}_pdf_") as tmp_dir_name:
+                tmp_dir = Path(tmp_dir_name)
+                downloaded_pdf = _download_url(direct_pdf_url, tmp_dir, 0)
+                shutil.copy2(downloaded_pdf, article_pdf_path)
+                return article_pdf_path.resolve(), False
+        except PMCRequestError as exc:
+            warnings.append(f"Article PDF download failed: {_format_pmc_error(exc)}")
+            return None, False
+        except Exception as exc:
+            warnings.append(f"Article PDF download failed: {exc}")
+            return None, False
 
     try:
         with tempfile.TemporaryDirectory(prefix=f"{normalize_pmcid(pmcid).lower()}_oa_") as tmp_dir_name:
@@ -190,6 +233,9 @@ def _ensure_article_pdf(
                 return None, False
             shutil.copy2(candidate, article_pdf_path)
             return article_pdf_path.resolve(), False
+    except PMCRequestError as exc:
+        warnings.append(f"Article PDF download failed: {_format_pmc_error(exc)}")
+        return None, False
     except Exception as exc:
         warnings.append(f"Article PDF download failed: {exc}")
         return None, False
@@ -304,6 +350,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = run_study_download(
             identifier=args.identifier,
         )
+    except PMCRequestError as exc:
+        logger.error("%s", _format_pmc_error(exc))
+        return 1
     except Exception as exc:
         logger.error("%s", exc)
         return 1

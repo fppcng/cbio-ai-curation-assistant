@@ -10,16 +10,18 @@ directory. Archive files are expanded and supported curation files are returned.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import hashlib
 import http.cookiejar
+from html.parser import HTMLParser
 import tarfile
 import time
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.parse import unquote, urljoin, urlparse
 from urllib.request import HTTPCookieProcessor, Request, build_opener, urlopen
@@ -40,6 +42,8 @@ HTTP_HEADERS = {
     "Accept": "*/*",
 }
 POW_MAX_ITERATIONS = 20_000_000
+PMC_REQUEST_RETRY_ATTEMPTS = 3
+PMC_REQUEST_RETRY_BASE_DELAY_SECONDS = 1.0
 PMC_DOWNLOAD_RETRY_ATTEMPTS = 3
 PMC_DOWNLOAD_RETRY_BASE_DELAY_SECONDS = 1.0
 
@@ -57,6 +61,117 @@ class ResolvedStudyIdentifier:
     identifier_type: str
     normalized_identifier: str
     pmcid: str
+
+
+@dataclass(frozen=True)
+class PMCErrorClassification:
+    category: str
+    retryable: bool
+    status_code: int | None = None
+
+
+class PMCRequestError(RuntimeError):
+    def __init__(
+        self,
+        operation: str,
+        classification: PMCErrorClassification,
+        detail: str,
+    ) -> None:
+        self.operation = operation
+        self.category = classification.category
+        self.retryable = classification.retryable
+        self.status_code = classification.status_code
+        self.detail = detail
+        super().__init__(f"{operation} failed [{self.category}]: {detail}")
+
+
+def _http_status_code_from_error(exc: Exception) -> int | None:
+    if isinstance(exc, PMCRequestError):
+        return exc.status_code
+    if isinstance(exc, requests.HTTPError):
+        response = exc.response
+        return response.status_code if response is not None else None
+    if isinstance(exc, HTTPError):
+        return exc.code
+    return None
+
+
+def _classify_pmc_error(exc: Exception) -> PMCErrorClassification:
+    if isinstance(exc, PMCRequestError):
+        return PMCErrorClassification(
+            category=exc.category,
+            retryable=exc.retryable,
+            status_code=exc.status_code,
+        )
+
+    status_code = _http_status_code_from_error(exc)
+    if status_code == 429:
+        return PMCErrorClassification(category="rate_limited", retryable=True, status_code=status_code)
+    if status_code in {403, 500, 502, 503, 504}:
+        return PMCErrorClassification(category="transient_remote_error", retryable=True, status_code=status_code)
+    if status_code == 404:
+        return PMCErrorClassification(category="remote_not_found", retryable=False, status_code=status_code)
+    if status_code is not None:
+        return PMCErrorClassification(category="remote_http_error", retryable=False, status_code=status_code)
+
+    if isinstance(exc, (requests.Timeout, requests.ConnectionError, TimeoutError, URLError)):
+        return PMCErrorClassification(category="transient_network_error", retryable=True)
+    if isinstance(exc, ET.ParseError):
+        return PMCErrorClassification(category="response_parse_error", retryable=False)
+    if isinstance(exc, ValueError):
+        message = str(exc)
+        if "No PMCID found for PMID" in message:
+            return PMCErrorClassification(category="unresolved_identifier", retryable=False)
+        if (
+            "proof-of-work challenge" in message
+            or "Preparing to download" in message
+            or "PMC returned an HTML" in message
+        ):
+            return PMCErrorClassification(category="pmc_challenge", retryable=True)
+        if "PMC XML was not returned" in message:
+            return PMCErrorClassification(category="unexpected_response", retryable=True)
+        if (
+            "PMID must contain digits." in message
+            or "PMCID is empty." in message
+            or "Could not parse PMCID" in message
+            or "Identifier must be a numeric PMID" in message
+        ):
+            return PMCErrorClassification(category="invalid_identifier", retryable=False)
+        return PMCErrorClassification(category="invalid_response", retryable=False)
+    if isinstance(exc, requests.RequestException):
+        return PMCErrorClassification(category="remote_request_error", retryable=False)
+    return PMCErrorClassification(category="unexpected_error", retryable=False)
+
+
+def _wrap_pmc_error(operation: str, exc: Exception) -> PMCRequestError:
+    if isinstance(exc, PMCRequestError):
+        return exc
+    return PMCRequestError(
+        operation=operation,
+        classification=_classify_pmc_error(exc),
+        detail=str(exc),
+    )
+
+
+def _run_with_pmc_retry(
+    *,
+    operation: str,
+    request_fn,
+    attempts: int = PMC_REQUEST_RETRY_ATTEMPTS,
+    base_delay_seconds: float = PMC_REQUEST_RETRY_BASE_DELAY_SECONDS,
+):
+    last_error: PMCRequestError | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return request_fn()
+        except Exception as exc:
+            last_error = _wrap_pmc_error(operation, exc)
+            if attempt >= attempts or not last_error.retryable:
+                raise last_error from exc
+            time.sleep(base_delay_seconds * attempt)
+
+    assert last_error is not None
+    raise last_error
 
 
 def detect_pubmed_identifier_type(identifier: str) -> str | None:
@@ -110,27 +225,32 @@ def pmid_to_pmcid(pmid: str) -> str:
     if not clean_pmid:
         raise ValueError("PMID must contain digits.")
 
-    params = urlencode({
-        "ids": clean_pmid,
-        "idtype": "pmid",
-        "format": "json",
-        "tool": NCBI_TOOL_NAME,
-        "email": NCBI_CONTACT_EMAIL,
-    })
-    request = Request(
-        f"https://pmc.ncbi.nlm.nih.gov/tools/idconv/api/v1/articles/?{params}",
-        headers=HTTP_HEADERS,
+    def _request_id_converter() -> str:
+        params = urlencode({
+            "ids": clean_pmid,
+            "idtype": "pmid",
+            "format": "json",
+            "tool": NCBI_TOOL_NAME,
+            "email": NCBI_CONTACT_EMAIL,
+        })
+        request = Request(
+            f"https://pmc.ncbi.nlm.nih.gov/tools/idconv/api/v1/articles/?{params}",
+            headers=HTTP_HEADERS,
+        )
+        with urlopen(request, timeout=NCBI_TIMEOUT_SECONDS) as response:
+            payload = response.read().decode("utf-8")
+
+        response_payload = json.loads(payload)
+        records = response_payload.get("records") or []
+        if not records or not records[0].get("pmcid"):
+            raise ValueError(f"No PMCID found for PMID {clean_pmid}.")
+
+        return normalize_pmcid(records[0]["pmcid"])
+
+    return _run_with_pmc_retry(
+        operation=f"PMID to PMCID resolution for PMID {clean_pmid}",
+        request_fn=_request_id_converter,
     )
-    with urlopen(request, timeout=NCBI_TIMEOUT_SECONDS) as response:
-        payload = response.read().decode("utf-8")
-    import json
-
-    payload = json.loads(payload)
-    records = payload.get("records") or []
-    if not records or not records[0].get("pmcid"):
-        raise ValueError(f"No PMCID found for PMID {clean_pmid}.")
-
-    return normalize_pmcid(records[0]["pmcid"])
 
 
 def _pmcid_numeric(pmcid: str) -> str:
@@ -138,32 +258,68 @@ def _pmcid_numeric(pmcid: str) -> str:
 
 
 def _fetch_pmc_xml(pmcid: str) -> str:
-    response = requests.get(
-        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
-        params={"db": "pmc", "id": _pmcid_numeric(pmcid), "retmode": "xml"},
-        headers=HTTP_HEADERS,
-        timeout=NCBI_TIMEOUT_SECONDS,
+    normalized_pmcid = normalize_pmcid(pmcid)
+
+    def _request_xml() -> str:
+        response = requests.get(
+            "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
+            params={"db": "pmc", "id": _pmcid_numeric(normalized_pmcid), "retmode": "xml"},
+            headers=HTTP_HEADERS,
+            timeout=NCBI_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        if "<article" not in response.text and "<pmc-articleset" not in response.text:
+            raise ValueError(f"PMC XML was not returned for {normalized_pmcid}.")
+        return response.text
+
+    return _run_with_pmc_retry(
+        operation=f"PMC XML fetch for {normalized_pmcid}",
+        request_fn=_request_xml,
     )
-    response.raise_for_status()
-    if "<article" not in response.text and "<pmc-articleset" not in response.text:
-        raise ValueError(f"PMC XML was not returned for {pmcid}.")
-    return response.text
+
+
+def _fetch_pmc_article_html(pmcid: str) -> str:
+    normalized_pmcid = normalize_pmcid(pmcid)
+
+    def _request_article_html() -> str:
+        response = requests.get(
+            f"https://pmc.ncbi.nlm.nih.gov/articles/{normalized_pmcid}/",
+            headers=HTTP_HEADERS,
+            timeout=NCBI_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        if "<html" not in response.text.lower():
+            raise ValueError(f"PMC article HTML was not returned for {normalized_pmcid}.")
+        return response.text
+
+    return _run_with_pmc_retry(
+        operation=f"PMC article HTML fetch for {normalized_pmcid}",
+        request_fn=_request_article_html,
+    )
 
 
 def _oa_package_url(pmcid: str) -> str | None:
-    response = requests.get(
-        "https://www.ncbi.nlm.nih.gov/pmc/utils/oa/oa.fcgi",
-        params={"id": normalize_pmcid(pmcid)},
-        headers=HTTP_HEADERS,
-        timeout=NCBI_TIMEOUT_SECONDS,
+    normalized_pmcid = normalize_pmcid(pmcid)
+
+    def _request_oa_package_url() -> str | None:
+        response = requests.get(
+            "https://www.ncbi.nlm.nih.gov/pmc/utils/oa/oa.fcgi",
+            params={"id": normalized_pmcid},
+            headers=HTTP_HEADERS,
+            timeout=NCBI_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        root = ET.fromstring(response.text)
+        for link in root.iter("link"):
+            if link.attrib.get("format") == "tgz" and link.attrib.get("href"):
+                href = link.attrib["href"]
+                return href.replace("ftp://ftp.ncbi.nlm.nih.gov", "https://ftp.ncbi.nlm.nih.gov")
+        return None
+
+    return _run_with_pmc_retry(
+        operation=f"PMC OA package lookup for {normalized_pmcid}",
+        request_fn=_request_oa_package_url,
     )
-    response.raise_for_status()
-    root = ET.fromstring(response.text)
-    for link in root.iter("link"):
-        if link.attrib.get("format") == "tgz" and link.attrib.get("href"):
-            href = link.attrib["href"]
-            return href.replace("ftp://ftp.ncbi.nlm.nih.gov", "https://ftp.ncbi.nlm.nih.gov")
-    return None
 
 
 def _download_oa_package(pmcid: str, output_dir: Path) -> list[Path]:
@@ -227,6 +383,134 @@ def _supplement_urls(pmcid: str, xml_text: str) -> list[str]:
                 urls.append(url)
 
     return urls
+
+
+class _PMCArticleLinkParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.links: list[dict[str, str]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() != "a":
+            return
+        attr_map = {key.lower(): (value or "").strip() for key, value in attrs}
+        href = attr_map.get("href", "")
+        if not href:
+            return
+        self.links.append(attr_map)
+
+
+def _article_html_links(html_text: str) -> list[dict[str, str]]:
+    parser = _PMCArticleLinkParser()
+    parser.feed(html_text)
+    return parser.links
+
+
+def _dedupe_preserve_order(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        ordered.append(value)
+    return ordered
+
+
+def _filename_extension(name: str) -> str:
+    lower = name.lower()
+    for compound_suffix in (".tar.gz", ".tar.bz2", ".tar.xz"):
+        if lower.endswith(compound_suffix):
+            return compound_suffix
+    return Path(lower).suffix.lower()
+
+
+def _supplement_urls_from_article_html(pmcid: str, html_text: str) -> list[str]:
+    normalized_pmcid = normalize_pmcid(pmcid)
+    instance_prefix = f"/articles/instance/{_pmcid_numeric(normalized_pmcid)}/bin/"
+    article_base_url = f"https://pmc.ncbi.nlm.nih.gov/articles/{normalized_pmcid}/"
+    urls: list[str] = []
+
+    for link in _article_html_links(html_text):
+        href = link.get("href", "")
+        data_ga_action = link.get("data-ga-action", "").lower()
+        if not href:
+            continue
+
+        href_path = urlparse(href).path or href
+        suffix = _filename_extension(href_path)
+        if suffix not in (SUPPORTED_SUPPLEMENT_EXTENSIONS | ARCHIVE_EXTENSIONS):
+            continue
+        if instance_prefix not in href_path and data_ga_action != "click_feat_suppl":
+            continue
+
+        urls.append(urljoin(article_base_url, href))
+
+    return _dedupe_preserve_order(urls)
+
+
+def _discover_supplement_urls(
+    pmcid: str,
+    *,
+    xml_text: str | None = None,
+    article_html: str | None = None,
+) -> list[str]:
+    discovered: list[str] = []
+    if xml_text:
+        discovered.extend(_supplement_urls(pmcid, xml_text))
+    if article_html:
+        discovered.extend(_supplement_urls_from_article_html(pmcid, article_html))
+    return _dedupe_preserve_order(discovered)
+
+
+def _article_pdf_url_from_article_html(pmcid: str, html_text: str) -> str | None:
+    normalized_pmcid = normalize_pmcid(pmcid)
+    article_base_url = f"https://pmc.ncbi.nlm.nih.gov/articles/{normalized_pmcid}/"
+
+    for link in _article_html_links(html_text):
+        href = link.get("href", "")
+        if not href:
+            continue
+
+        href_path = (urlparse(href).path or href).lower()
+        if not href_path.endswith('.pdf'):
+            continue
+        if f"/articles/{normalized_pmcid.lower()}/pdf/" in href_path or href_path.startswith('/pdf/'):
+            return urljoin(article_base_url, href)
+    return None
+
+
+def _looks_like_html_payload(content: bytes) -> bool:
+    prefix = content[:4096].lstrip().lower()
+    return (
+        prefix.startswith(b"<!doctype html")
+        or prefix.startswith(b"<html")
+        or prefix.startswith(b"<head")
+        or prefix.startswith(b"<body")
+        or b"<title>preparing to download" in prefix
+        or b"pow_challenge" in prefix
+    )
+
+
+def _validate_downloaded_content(filename: str, content_type: str, content: bytes) -> None:
+    if not content:
+        raise ValueError(f"Downloaded content for {filename} was empty.")
+
+    normalized_content_type = (content_type or "").lower()
+    if "text/html" in normalized_content_type or _looks_like_html_payload(content):
+        raise ValueError(f"PMC returned an HTML page instead of {filename}.")
+
+    extension = _filename_extension(filename)
+    if extension == ".pdf" and not content.startswith(b"%PDF-"):
+        raise ValueError(f"Downloaded content for {filename} was not a PDF.")
+    if extension in {".zip", ".docx", ".xlsx"} and not content.startswith(b"PK"):
+        raise ValueError(f"Downloaded content for {filename} was not a ZIP-based document.")
+    if extension in {".gz", ".tgz", ".tar.gz"} and not content.startswith(b"\x1f\x8b"):
+        raise ValueError(f"Downloaded content for {filename} was not a gzip archive.")
+    if extension == ".bz2" and not content.startswith(b"BZh"):
+        raise ValueError(f"Downloaded content for {filename} was not a bzip2 archive.")
+    if extension in {".xz", ".tar.xz"} and not content.startswith(b"\xfd7zXZ\x00"):
+        raise ValueError(f"Downloaded content for {filename} was not an xz archive.")
 
 
 def _safe_filename(filename: str, fallback: str) -> str:
@@ -342,8 +626,7 @@ def _download_url_with_urllib_pow(url: str, output_dir: Path, index: int) -> Pat
             content_type = response.headers.get("content-type", "").lower()
             filename = _filename_from_headers(url, response.headers.get("content-disposition", ""), index)
 
-    if "text/html" in content_type:
-        raise ValueError(f"PMC returned an HTML page instead of {filename}.")
+    _validate_downloaded_content(filename, content_type, content)
 
     path = output_dir / filename
     if path.exists():
@@ -360,19 +643,7 @@ def _is_pmc_download_host(url: str) -> bool:
 
 
 def _is_retryable_pmc_download_error(exc: Exception) -> bool:
-    if isinstance(exc, requests.HTTPError):
-        response = exc.response
-        return response is not None and response.status_code in {403, 429, 500, 502, 503, 504}
-    if isinstance(exc, HTTPError):
-        return exc.code in {403, 429, 500, 502, 503, 504}
-    if isinstance(exc, ValueError):
-        message = str(exc)
-        return (
-            "PMC returned an HTML" in message
-            or "proof-of-work challenge" in message
-            or "Preparing to download" in message
-        )
-    return False
+    return _classify_pmc_error(exc).retryable
 
 
 def _download_url_once(url: str, output_dir: Path, index: int) -> Path:
@@ -392,6 +663,8 @@ def _download_url_once(url: str, output_dir: Path, index: int) -> Path:
         if _is_pmc_download_host(url):
             return _download_url_with_urllib_pow(url, output_dir, index)
         raise ValueError(f"PMC returned an HTML challenge page instead of {filename}.")
+
+    _validate_downloaded_content(filename, content_type, response.content)
 
     path = output_dir / filename
     if path.exists():
@@ -497,12 +770,24 @@ def download_pmc_supplements(
     except Exception as exc:
         download_errors.append(f"PMC OA package: {exc}")
 
+    xml_text = ""
+    article_html = ""
+
     try:
         xml_text = _fetch_pmc_xml(pmcid)
-        urls = _supplement_urls(pmcid, xml_text)
     except Exception as exc:
-        urls = []
         download_errors.append(f"PMC XML: {exc}")
+
+    try:
+        article_html = _fetch_pmc_article_html(pmcid)
+    except Exception as exc:
+        download_errors.append(f"PMC article HTML: {exc}")
+
+    urls = _discover_supplement_urls(
+        pmcid,
+        xml_text=xml_text or None,
+        article_html=article_html or None,
+    )
 
     for index, url in enumerate(urls, start=1):
         try:
