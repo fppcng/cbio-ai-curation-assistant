@@ -127,12 +127,14 @@ def _extract_pdf_text(pdf_path: str, max_pages: int = 12) -> str:
 # ─────────────────────────────────────────────────────────────
 
 def _read_excel_sheets(path: str) -> dict[str, pd.DataFrame]:
-    """Return all sheets as DataFrames, stripping blank leading rows."""
+    """Return non-empty sheets as DataFrames, stripping blank leading rows."""
     xl = pd.ExcelFile(path)
     sheets: dict[str, pd.DataFrame] = {}
     for name in xl.sheet_names:
         df = xl.parse(name, header=None)
         df = df.dropna(how="all")
+        if df.empty:
+            continue
         sheets[name] = df
     return sheets
 
@@ -811,7 +813,7 @@ def _suggest_datatype(df: pd.DataFrame, current_fmt: str) -> list[dict]:
 def _build_instructions(cr: ClassificationResult, df: pd.DataFrame, sheet_name: str) -> dict:
     """Return structured curation instructions for a classified sheet."""
     fmt = cr.format_key
-    cols = [str(c) for c in df.iloc[0] if pd.notna(c)]  # row 0 is usually the real header
+    cols = [str(c) for c in df.iloc[0] if pd.notna(c)] if not df.empty else []  # row 0 is usually the real header
 
     base = {
         "classification":      fmt,
@@ -1019,6 +1021,36 @@ def _build_instructions(cr: ClassificationResult, df: pd.DataFrame, sheet_name: 
 # Main orchestration
 # ─────────────────────────────────────────────────────────────
 
+def _build_failed_supplementary_record(
+    file_name: str,
+    sheet_name: str,
+    error: Exception,
+) -> dict[str, Any]:
+    error_text = str(error)
+    return {
+        "file": file_name,
+        "sheet": sheet_name,
+        "classification": "NOT_LOADABLE",
+        "error": error_text,
+        "cbio_target_file": "N/A",
+        "curability": "NO",
+        "priority": "N/A",
+        "confidence": 0,
+        "verdict": f"Parse error: {error_text}",
+        "required_present": [],
+        "required_missing": [],
+        "optional_present": [],
+        "alias_mappings": {},
+        "candidate_scores": [],
+        "detected_columns": [],
+        "data_rows_approx": 0,
+        "column_mapping": [],
+        "transformations": [],
+        "missing_required": [],
+        "notes": [],
+    }
+
+
 def _analyse_supplementary_files(supp_paths: list[str]) -> list[dict]:
     """Inspect every sheet in every supp file and return analysis records.
 
@@ -1030,25 +1062,17 @@ def _analyse_supplementary_files(supp_paths: list[str]) -> list[dict]:
         try:
             sheets = _read_file_as_sheets(path)
         except Exception as e:
-            records.append({
-                "file": fname, "sheet": "-",
-                "classification": "NOT_LOADABLE",
-                "error": str(e),
-                "cbio_target_file": "N/A",
-                "curability": "NO", "priority": "N/A",
-                "confidence": 0, "verdict": f"Parse error: {e}",
-                "required_present": [], "required_missing": [],
-                "optional_present": [], "alias_mappings": {},
-                "candidate_scores": [],
-                "detected_columns": [], "data_rows_approx": 0,
-                "column_mapping": [], "transformations": [],
-                "missing_required": [], "notes": [],
-            })
+            records.append(_build_failed_supplementary_record(fname, "-", e))
             continue
 
         for sheet_name, df in sheets.items():
-            cr = _classify_sheet(df)
-            instructions = _build_instructions(cr, df, sheet_name)
+            try:
+                cr = _classify_sheet(df)
+                instructions = _build_instructions(cr, df, sheet_name)
+            except Exception as e:
+                records.append(_build_failed_supplementary_record(fname, sheet_name, e))
+                continue
+
             instructions["file"] = fname
             instructions["sheet"] = sheet_name
             records.append(instructions)
