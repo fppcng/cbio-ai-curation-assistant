@@ -6,7 +6,9 @@ Run the validator from the repo root with the repo venv:
 
 ```bash
 ./.venv/bin/python cbioportal_core_validator/scripts/importer/validateData.py \
-  -s cbioportal_dataset/<PMCID>/ \
+  -s studies/<PMCID>/curated/ \
+  -html studies/<PMCID>/validation/validator_report.html \
+  -json studies/<PMCID>/validation/validator_report.json \
   -n \
   -v
 ```

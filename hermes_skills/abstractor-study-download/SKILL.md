@@ -29,11 +29,11 @@ If any check fails, stop and report that the Hermes environment was not loaded c
 
 * Never redownload study assets that already exist locally unless the user explicitly asks to refresh or overwrite them.
 * Treat the resolved PMCID as the canonical study identifier for the whole run.
-* The storage root is `$CBIO_ASSISTANT_REPO_ROOT/studies/<PMCID>/data/raw/`.
+* The storage root is `$CBIO_ASSISTANT_REPO_ROOT/studies/<PMCID>/raw/`.
 
 ## Workflow
 
-1. Check whether `$CBIO_ASSISTANT_REPO_ROOT/studies/<PMCID>/data/raw/manifest.json` already exists and still points to files that are present on disk.
+1. Check whether `$CBIO_ASSISTANT_REPO_ROOT/studies/<PMCID>/raw/manifest.json` already exists and still points to files that are present on disk.
 2. If the manifest and files are already present, reuse them and report that the study artifacts already existed locally.
 3. Otherwise run the repo's download script from the repo root using the project virtual environment:
 
@@ -51,7 +51,7 @@ cd "$CBIO_ASSISTANT_REPO_ROOT"
 --output-json /tmp/<identifier>_download_result.json
 ```
 
-5. After the run, verify the manifest and the files on disk under `$CBIO_ASSISTANT_REPO_ROOT/studies/<PMCID>/data/raw/`.
+5. After the run, verify the manifest and the files on disk under `$CBIO_ASSISTANT_REPO_ROOT/studies/<PMCID>/raw/`.
 
 ## What the abstractor_study_download.py script owns
 
@@ -70,7 +70,8 @@ Do not restate those implementation details in agent reasoning unless they are d
 ## Reporting requirements
 
 * Report the resolved PMID/PMCID mapping when useful, especially for numeric-only input.
-* Report the canonical study path: `$CBIO_ASSISTANT_REPO_ROOT/studies/<PMCID>/data/raw/`.
+* Report the canonical study path: `$CBIO_ASSISTANT_REPO_ROOT/studies/<PMCID>/`.
+* Report the canonical raw-artifacts path: `$CBIO_ASSISTANT_REPO_ROOT/studies/<PMCID>/raw/`.
 * Report the actual artifacts present on disk:
 
   * XML path

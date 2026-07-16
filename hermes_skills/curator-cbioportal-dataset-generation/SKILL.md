@@ -7,25 +7,23 @@ description: Generate a complete cBioPortal study dataset from local supplementa
 
 Use this skill when the user wants a cBioPortal dataset generated from local supplementary files and study artifacts that already exist on disk.
 
-## Path anchor
-
-Treat `/home/cbio26/cbio-ai-curation-assistant` as the repository root.
+## Prerequisites - Environment verification
+Run:
+```bash
+test -n "$CBIO_ASSISTANT_REPO_ROOT"
+test -d "$CBIO_ASSISTANT_REPO_ROOT"
+test -x "$CBIO_ASSISTANT_REPO_ROOT/.venv/bin/python"
+printf 'CBIO_ASSISTANT_REPO_ROOT=%s\n' "$CBIO_ASSISTANT_REPO_ROOT"
+```
+If any check fails, stop and report that the Hermes environment was not loaded correctly.
 
 ## Required references
-
-Before writing or processing any files, read and understand:
-
-- `references/cBioPortal_Data_Curation_SOP.md`
-- `references/cBioPortal_File_Formats.md`
-
-Treat those references as the source of truth for schema, required study structure, allowed values, file naming, formatting, validation rules, and data-transformation requirements.
+Treat the references in the references folder (cBioPortal_Data_Curation_SOP and cBioPortal_File_Formats) as the source of truth for schema, especially required study structure, allowed values, file naming, formatting, validation rules, and data-transformation requirements.
 
 ## Required study context
-
-Before generating the dataset, locate and use the matching cbioabstractor report JSON for the study.
+Before generating the dataset, locate and use the matching cbioabstractor report JSON for the study. If the study is not present, generate it with the abstractor-curation-report-generation skill.
 
 Treat that report as required context for:
-
 - study-level metadata
 - disease and cohort description
 - expected data modalities
@@ -36,22 +34,17 @@ Prefer the report JSON over re-deriving the same study context from scratch. Reu
 
 If the matching cbioabstractor report JSON is missing, report that explicitly before claiming a complete dataset.
 
-The canonical location is typically `studies/<PMCID>/reports/*.json`.
+The canonical location for the cbioabstractor report is `studies/<PMCID>/reports/<study_id>_abstractor_report.json`.
 
 ## Output directory
-
-Save generated cBioPortal results under `cbioportal_dataset/<PMCID>/`.
+Save generated cBioPortal results under `studies/<PMCID>/curated/`.
 
 ## Main rule
-
 Generate the most complete valid study that the source data supports, but do not invent missing values, unsupported identifiers, or nonexistent modalities.
-
 If a required cBioPortal file cannot be produced from the available evidence, report it explicitly instead of fabricating it.
 
 ## Scope
-
 This skill covers end-to-end dataset generation from local inputs, including:
-
 - study metadata files
 - clinical patient data
 - clinical sample data
@@ -59,9 +52,9 @@ This skill covers end-to-end dataset generation from local inputs, including:
 - copy-number, structural variant, fusion, or expression outputs when supported by the source files
 - case lists
 - study validation and issue reporting
+- optional evaluation artifacts when the study is compared against another dataset or baseline
 
 ## Workflow
-
 1. Read the required references and load the matching cbioabstractor report JSON.
 2. Inventory the available local inputs.
    - Identify supplementary files, manifests, paper metadata, and prior study artifacts.
@@ -85,26 +78,17 @@ This skill covers end-to-end dataset generation from local inputs, including:
 7. Validate before reporting completion.
    - Check schema, naming, and identifier consistency.
    - Flag unsupported rows, malformed values, and incomplete required metadata.
-   - Run the cBioPortal validator and report its result.
+   - Run the cBioPortal validator against `studies/<PMCID>/curated/` and write validation artifacts under `studies/<PMCID>/validation/`.
    - Interpret validator results carefully: a warning-only run may return a non-zero exit code, so use the validator summary text as well as the exit status.
    - Watch for common clinical pitfalls: duplicate attribute names across patient/sample files, patient rows with no generated samples, and invalid placeholder colors in `cancer_type.txt`.
    - See `references/validator-and-clinical-pitfalls.md` for concrete fixes and caveats.
-8. Report the final outcome.
+8. If you produce comparison outputs or reviewer-facing diffs, save them under `studies/<PMCID>/evaluation/`.
+9. Report the final outcome.
    - List generated files.
    - List assumptions, warnings, and unresolved issues.
    - Distinguish validated outputs from inferred decisions.
 
-## File-classification guidance
-
-When classifying supplementary files:
-
-- prefer the actual columns and values over the filename alone
-- one source file may contribute to multiple cBioPortal outputs
-- not every supplementary file should become a cBioPortal file
-- keep unsupported or ambiguous files out of the final dataset until the ambiguity is explained
-
 ## Validation rules
-
 - Do not claim a study is complete unless all required generated files are present and internally consistent.
 - Do not fabricate required fields simply to satisfy a schema.
 - If the source data only supports a partial study, produce the partial study and explain the gaps.
@@ -112,26 +96,24 @@ When classifying supplementary files:
 - Do not skip the final validator run silently. If the validator cannot be executed, report the blocker explicitly.
 
 ## Final validation command
-
 From the repository root, validate the generated study with:
-
 ```bash
 ./.venv/bin/python cbioportal_core_validator/scripts/importer/validateData.py \
-  -s cbioportal_dataset/<PMCID>/ \
+  -s studies/<PMCID>/curated/ \
+  -html studies/<PMCID>/validation/validator_report.html \
+  -json studies/<PMCID>/validation/validator_report.json \
   -n \
   -v
 ```
-
 Use that interpreter and script path unless the user provides a different validator environment explicitly.
-
 If the validator environment is missing dependencies, report the missing dependency or environment issue instead of claiming validation succeeded.
 
 ## Output expectations
-
 The result should include:
-
-- the generated cBioPortal study directory under `cbioportal_dataset/<PMCID>/`
+- the generated cBioPortal study directory under `studies/<PMCID>/curated/`
 - all produced data and meta files
 - case lists for generated modalities
 - a concise validation summary
+- validator artifacts under `studies/<PMCID>/validation/`
+- evaluation artifacts under `studies/<PMCID>/evaluation/` when they were produced
 - a list of assumptions, warnings, and unresolved issues

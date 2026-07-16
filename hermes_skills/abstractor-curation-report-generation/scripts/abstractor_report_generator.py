@@ -56,6 +56,8 @@ from pmc_supplement_fetcher import SUPPORTED_SUPPLEMENT_EXTENSIONS  # noqa: E402
 logger = logging.getLogger(__name__)
 
 _LLM_DISCOVERY_ORDER = ("LiteLLM", "OpenAI", "Anthropic")
+_REPORTS_DIRNAME = "reports"
+_DEFAULT_REPORT_SUFFIX = "abstractor_report"
 
 
 def _load_llm_env_value(env_name: str | None, default: str = "") -> str:
@@ -343,7 +345,7 @@ def _build_report_stem(
         study_id = study_root.name if study_root is not None else "cbioportal_curation"
 
     stem = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in study_id).strip("._")
-    return (stem or "cbioportal_curation") + "_report"
+    return f"{stem or 'cbioportal_curation'}_{_DEFAULT_REPORT_SUFFIX}"
 
 
 def _build_report_pdf_filename(
@@ -390,7 +392,7 @@ def _resolve_output_pdf_path(
         directory = Path(output_dir).expanduser().resolve()
         return str(directory / _build_report_pdf_filename(meta, summary, study_root))
     if study_root is not None:
-        return str((study_root / "reports" / _build_report_pdf_filename(meta, summary, study_root)).resolve())
+        return str((study_root / _REPORTS_DIRNAME / _build_report_pdf_filename(meta, summary, study_root)).resolve())
     return None
 
 
@@ -410,7 +412,7 @@ def _resolve_output_json_path(
         directory = Path(output_dir).expanduser().resolve()
         return str((directory / _build_report_json_filename(meta, summary, study_root)).resolve())
     if study_root is not None:
-        return str((study_root / "reports" / _build_report_json_filename(meta, summary, study_root)).resolve())
+        return str((study_root / _REPORTS_DIRNAME / _build_report_json_filename(meta, summary, study_root)).resolve())
     return None
 
 
@@ -583,7 +585,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--output-pdf",
         help=(
             "Full output path for the generated PDF report. When omitted, the script prefers "
-            "studies/<PMCID>/reports/<study_id>_report.pdf if it can infer a unique study root."
+            "studies/<PMCID>/reports/<study_id>_abstractor_report.pdf if it can infer a unique study root."
         ),
     )
     parser.add_argument(
@@ -599,7 +601,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--output-json",
         help=(
             "Optional file path where the cBioPortal curation report JSON will be written. "
-            "When omitted, the script persists JSON automatically as <study_id>_report.json "
+            "When omitted, the script persists JSON automatically as <study_id>_abstractor_report.json "
             "when an output PDF path, output directory, or unique study root is available."
         ),
     )

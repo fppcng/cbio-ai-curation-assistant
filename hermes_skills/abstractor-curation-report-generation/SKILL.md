@@ -25,7 +25,7 @@ If any check fails, stop and report that the Hermes environment was not loaded c
 ## Core rules
 - Never invent paper or supplementary paths. Use only files that exist locally.
 - Pass exactly one paper source to the script: `--paper-pdf` or `--paper-xml`.
-- Save report artifacts under `$CBIO_ASSISTANT_REPO_ROOT/studies/<PMCID>/reports/` whenever the inputs belong to a single study, using recognizable default names like `<study_id>_report.pdf` and `<study_id>_report.json`.
+- Save report artifacts under `$CBIO_ASSISTANT_REPO_ROOT/studies/<PMCID>/reports/` whenever the inputs belong to a single study, using recognizable default names like `<study_id>_abstractor_report.pdf` and `<study_id>_abstractor_report.json`.
 - Use LLM-backed metadata extraction when configuration is available; otherwise allow the script to fall back deterministically without LLM.
 - It is acceptable to return or attach the generated PDF to the user when the run succeeds.
 
@@ -43,9 +43,9 @@ cd "$CBIO_ASSISTANT_REPO_ROOT"
 7. When the paper source is a PDF, use `--paper-pdf` instead of `--paper-xml`.
 8. If the script cannot infer a unique study root from the paper and supplementary paths, pass `--output-dir /home/cbio26/cbio-ai-curation-assistant/studies/<PMCID>/reports` explicitly.
 9. If you need a fixed PDF filename, pass `--output-pdf` with an absolute path inside the study reports/ directory:
-`--output-pdf "$CBIO_ASSISTANT_REPO_ROOT/studies/<PMCID>/reports/<study_id>_report.pdf"`
+`--output-pdf "$CBIO_ASSISTANT_REPO_ROOT/studies/<PMCID>/reports/<study_id>_abstractor_report.pdf"`
 10. If you need a fixed JSON filename, pass `--output-json` with an absolute path inside the study reports/ directory:
-`--output-json "$CBIO_ASSISTANT_REPO_ROOT/studies/<PMCID>/reports/<study_id>_repo`
+`--output-json "$CBIO_ASSISTANT_REPO_ROOT/studies/<PMCID>/reports/<study_id>_abstractor_report.json"`
 11. After the run, verify the generated PDF and JSON paths on disk.
 
 ## What the abstractor_report_generator.py script owns
@@ -59,7 +59,7 @@ The script deterministically handles:
 - metadata extraction from the paper source
 - supplementary-file analysis
 - curation summary construction
-- default PDF and JSON path resolution under `studies/<PMCID>/reports/ with recognizable names like <study_id>_report.pdf` and `<study_id>_report.json` when a unique study root can be inferred
+- default PDF and JSON path resolution under `studies/<PMCID>/reports/` with recognizable names like `<study_id>_abstractor_report.pdf` and `<study_id>_abstractor_report.json` when a unique study root can be inferred
 - PDF generation when PDF output is enabled
 - JSON report rendering and persistence when an output location is available
 

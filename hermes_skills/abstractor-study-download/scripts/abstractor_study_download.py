@@ -62,7 +62,7 @@ from pmc_supplement_fetcher import (  # noqa: E402
 logger = logging.getLogger(__name__)
 
 _STUDIES_RELATIVE_PATH = Path("studies")
-_STUDY_RAW_DATA_RELATIVE_PATH = Path("data/raw")
+_STUDY_RAW_RELATIVE_PATH = Path("raw")
 _MANIFEST_RELATIVE_PATH = Path("manifest.json")
 _ARTICLE_SUBDIR = "article"
 _SUPPLEMENTARY_SUBDIR = "supplementary"
@@ -72,7 +72,7 @@ _SUPPLEMENTARY_SUBDIR = "supplementary"
 class DownloadPathConfig:
     repo_root: Path
     studies_root: Path
-    study_raw_data_relative_path: Path
+    study_raw_relative_path: Path
     manifest_relative_path: Path
 
 
@@ -83,7 +83,7 @@ def _load_download_path_config() -> DownloadPathConfig:
     return DownloadPathConfig(
         repo_root=_REPO_ROOT,
         studies_root=studies_root,
-        study_raw_data_relative_path=_STUDY_RAW_DATA_RELATIVE_PATH,
+        study_raw_relative_path=_STUDY_RAW_RELATIVE_PATH,
         manifest_relative_path=_MANIFEST_RELATIVE_PATH,
     )
 
@@ -248,14 +248,11 @@ def run_study_download(
     resolved = resolve_study_identifier_to_pmcid(identifier)
     path_config = _load_download_path_config()
 
-    study_root = (
-        path_config.studies_root
-        / resolved.pmcid
-        / path_config.study_raw_data_relative_path
-    )
-    article_dir = study_root / _ARTICLE_SUBDIR
-    supplementary_dir = study_root / _SUPPLEMENTARY_SUBDIR
-    manifest_path = study_root / path_config.manifest_relative_path
+    study_root = path_config.studies_root / resolved.pmcid
+    raw_root = study_root / path_config.study_raw_relative_path
+    article_dir = raw_root / _ARTICLE_SUBDIR
+    supplementary_dir = raw_root / _SUPPLEMENTARY_SUBDIR
+    manifest_path = raw_root / path_config.manifest_relative_path
 
     article_dir.mkdir(parents=True, exist_ok=True)
     supplementary_dir.mkdir(parents=True, exist_ok=True)
@@ -297,10 +294,12 @@ def run_study_download(
             "repo_root_env": _REPO_ROOT_ENV,
             "repo_root": str(path_config.repo_root),
             "studies_root": str(path_config.studies_root),
-            "study_raw_data_relative_path": str(path_config.study_raw_data_relative_path),
+            "study_raw_relative_path": str(path_config.study_raw_relative_path),
+            "study_raw_data_relative_path": str(path_config.study_raw_relative_path),
             "manifest_relative_path": str(path_config.manifest_relative_path),
         },
         "study_root": str(study_root),
+        "raw_root": str(raw_root),
         "article_dir": str(article_dir),
         "supplementary_dir": str(supplementary_dir),
         "manifest_path": str(manifest_path),
@@ -320,7 +319,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
             "Download article XML/PDF and supplementary files from PMC into the "
-            "managed study path under $CBIO_ASSISTANT_REPO_ROOT/studies."
+            "managed study path under $CBIO_ASSISTANT_REPO_ROOT/studies/<PMCID>/raw."
         ),
     )
     parser.add_argument("identifier", help="Numeric PMID or PMCID such as PMC8432745.")
