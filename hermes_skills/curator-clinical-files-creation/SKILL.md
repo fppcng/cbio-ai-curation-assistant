@@ -11,10 +11,15 @@ description: Create cBioPortal clinical data files from study publications, supp
   - filenames;
   - file formats;
   - sheet, table, and column names.
-4. Generate:
+4. For every clinical column found in the source files, run `scripts/consult_clinical_dictionary.py` using the source column name. Review the returned candidates to determine:
+  - the standard cBioPortal column header;
+  - whether the attribute belongs in `data_clinical_sample.txt` or `data_clinical_patient.txt`;
+  - the datatype, display name, and description.
+Select a candidate only when its meaning matches the source attribute. Do not choose a result based only on name similarity. If no candidate preserves the source meaning, create an appropriate custom attribute.
+5. Generate:
   - meta_clinical_sample.txt;
   - data_clinical_sample.txt;
   - meta_clinical_patient.txt, only when patient-level data is available.
   - data_clinical_patient.txt, only when patient-level data is available.
-5. Ensure identifiers are consistent, attributes are placed at the correct level, and no unsupported mappings or transformations are introduced.
+6. Ensure identifiers are consistent, attributes are placed at the correct level, and no unsupported mappings or transformations are introduced.
 
