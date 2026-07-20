@@ -1,12 +1,3 @@
-"""
-Download article XML, article PDF when available, and supplementary study files from PMC.
-
-Example
--------
-    python hermes_skills/abstractor-study-download/scripts/abstractor_study_download.py PMC8432745 \
-        --output-json /tmp/pmc8432745_download.json
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -14,38 +5,11 @@ import json
 import logging
 import os
 import shutil
-import sys
 import tempfile
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
-_REPO_ROOT_ENV = "CBIO_ASSISTANT_REPO_ROOT"
-
-
-def _get_repo_root() -> Path:
-    raw_repo_root = os.environ.get(_REPO_ROOT_ENV)
-    if not raw_repo_root:
-        raise RuntimeError(
-            f"Missing required environment variable {_REPO_ROOT_ENV}. "
-            "Make sure Hermes loaded its environment before running this script."
-        )
-
-    repo_root = Path(raw_repo_root).expanduser().resolve()
-    if not repo_root.is_dir():
-        raise RuntimeError(
-            f"{_REPO_ROOT_ENV} does not point to an existing directory: {repo_root}"
-        )
-
-    return repo_root
-
-
-_REPO_ROOT = _get_repo_root()
-_MODULE_ROOT = _REPO_ROOT / "cbio_abstractor"
-if str(_MODULE_ROOT) not in sys.path:
-    sys.path.insert(0, str(_MODULE_ROOT))
-
-from pmc_supplement_fetcher import (  # noqa: E402
+from cbio_abstractor.pmc_supplement_fetcher import (  
     PMCRequestError,
     SUPPORTED_SUPPLEMENT_EXTENSIONS,
     _article_pdf_url_from_article_html,
@@ -61,31 +25,16 @@ from pmc_supplement_fetcher import (  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-_STUDIES_RELATIVE_PATH = Path("studies")
 _STUDY_RAW_RELATIVE_PATH = Path("raw")
 _MANIFEST_RELATIVE_PATH = Path("manifest.json")
 _ARTICLE_SUBDIR = "article"
 _SUPPLEMENTARY_SUBDIR = "supplementary"
 
 
-@dataclass(frozen=True)
-class DownloadPathConfig:
-    repo_root: Path
-    studies_root: Path
-    study_raw_relative_path: Path
-    manifest_relative_path: Path
-
-
-def _load_download_path_config() -> DownloadPathConfig:
-    studies_root = (_REPO_ROOT / _STUDIES_RELATIVE_PATH).resolve()
-    studies_root.mkdir(parents=True, exist_ok=True)
-
-    return DownloadPathConfig(
-        repo_root=_REPO_ROOT,
-        studies_root=studies_root,
-        study_raw_relative_path=_STUDY_RAW_RELATIVE_PATH,
-        manifest_relative_path=_MANIFEST_RELATIVE_PATH,
-    )
+def _prepare_studies_root(studies_root: Path) -> Path:
+    resolved_root = studies_root.expanduser().resolve()
+    resolved_root.mkdir(parents=True, exist_ok=True)
+    return resolved_root
 
 
 def _write_json(path: Path, payload: Any) -> None:
@@ -244,15 +193,17 @@ def _ensure_article_pdf(
 def run_study_download(
     *,
     identifier: str,
+    studies_root: Path,
 ) -> dict[str, Any]:
+    
     resolved = resolve_study_identifier_to_pmcid(identifier)
-    path_config = _load_download_path_config()
+    studies_root = _prepare_studies_root(studies_root)
 
-    study_root = path_config.studies_root / resolved.pmcid
-    raw_root = study_root / path_config.study_raw_relative_path
+    study_root = studies_root / resolved.pmcid
+    raw_root = study_root / _STUDY_RAW_RELATIVE_PATH
     article_dir = raw_root / _ARTICLE_SUBDIR
     supplementary_dir = raw_root / _SUPPLEMENTARY_SUBDIR
-    manifest_path = raw_root / path_config.manifest_relative_path
+    manifest_path = raw_root / _MANIFEST_RELATIVE_PATH
 
     article_dir.mkdir(parents=True, exist_ok=True)
     supplementary_dir.mkdir(parents=True, exist_ok=True)
@@ -291,12 +242,9 @@ def run_study_download(
             "pmcid": resolved.pmcid,
         },
         "managed_paths": {
-            "repo_root_env": _REPO_ROOT_ENV,
-            "repo_root": str(path_config.repo_root),
-            "studies_root": str(path_config.studies_root),
-            "study_raw_relative_path": str(path_config.study_raw_relative_path),
-            "study_raw_data_relative_path": str(path_config.study_raw_relative_path),
-            "manifest_relative_path": str(path_config.manifest_relative_path),
+            "studies_root": str(studies_root),
+            "study_raw_relative_path": str(_STUDY_RAW_RELATIVE_PATH),
+            "manifest_relative_path": str(_MANIFEST_RELATIVE_PATH),
         },
         "study_root": str(study_root),
         "raw_root": str(raw_root),
@@ -318,11 +266,17 @@ def run_study_download(
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Download article XML/PDF and supplementary files from PMC into the "
-            "managed study path under $CBIO_ASSISTANT_REPO_ROOT/studies/<PMCID>/raw."
+            "Download article XML/PDF and supplementary files from PMC into "
+            "<studies-root>/<PMCID>/raw."
         ),
     )
     parser.add_argument("identifier", help="Numeric PMID or PMCID such as PMC8432745.")
+    parser.add_argument(
+        "--studies-root",
+        required=True,
+        type=Path,
+        help="Directory containing the managed cBioPortal study workspaces.",
+    )
     parser.add_argument(
         "--output-json",
         help="Optional file path where the full download result JSON will be written.",
@@ -348,6 +302,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         result = run_study_download(
             identifier=args.identifier,
+            studies_root=args.studies_root,
         )
     except PMCRequestError as exc:
         logger.error("%s", _format_pmc_error(exc))
