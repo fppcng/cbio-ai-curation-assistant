@@ -1,56 +1,43 @@
 ---
 name: curator-oncotree-consultation
 description: Use this skill when mapping cancer types, histologies, diagnoses, or tumor subtypes to OncoTree terminology.
+required_environment_variables:
+  - name: CBIO_CURATION_ASSISTANT_HOME
+    prompt: Absolute path to the cBioPortal AI Curation Assistant installation directory
 ---
 
 # cBioPortal OncoTree Mapping
 
+## When to use
 Use this skill whenever source disease labels need to be mapped to OncoTree values for cBioPortal study files.
 
-## Prerequisites - Environment verification
-
-Before running the workflow, verify that the Hermes environment has loaded the required repository root.
-
-Run:
-
-```bash
-test -n "$CBIO_ASSISTANT_REPO_ROOT"
-test -d "$CBIO_ASSISTANT_REPO_ROOT"
-test -x "$CBIO_ASSISTANT_REPO_ROOT/.venv/bin/python"
-
-printf 'CBIO_ASSISTANT_REPO_ROOT=%s\n' "$CBIO_ASSISTANT_REPO_ROOT"
-```
-
-If any check fails, stop and report that the Hermes environment was not loaded correctly or that `CBIO_ASSISTANT_REPO_ROOT` does not point to a valid repository.
-
 ## Tool path
-
 Use the local OncoTree search script:
 ```bash
-$CBIO_ASSISTANT_REPO_ROOT/hermes_skills/curator-oncotree-consultation/scripts/search_oncotree_code.py
+$CBIO_CURATION_ASSISTANT_HOME/hermes_skills/curator-oncotree-consultation/scripts/search_oncotree_code.py
 ```
 
 Run it with the project virtual environment:
 ```bash
-"$CBIO_ASSISTANT_REPO_ROOT/.venv/bin/python" \
-  "$CBIO_ASSISTANT_REPO_ROOT/hermes_skills/curator-oncotree-consultation/scripts/search_oncotree_code.py" \
+"$CBIO_CURATION_ASSISTANT_HOME/.venv/bin/python" \
+  "$CBIO_CURATION_ASSISTANT_HOME/hermes_skills/curator-oncotree-consultation/scripts/search_oncotree_code.py" \
   -q '<disease or subtype text>' \
   --json
 ```
 
 Example:
 ```bash
-"$CBIO_ASSISTANT_REPO_ROOT/.venv/bin/python" \
-  "$CBIO_ASSISTANT_REPO_ROOT/hermes_skills/curator-oncotree-consultation/scripts/search_oncotree_code.py" \
+"$CBIO_CURATION_ASSISTANT_HOME/.venv/bin/python" \
+  "$CBIO_CURATION_ASSISTANT_HOME/hermes_skills/curator-oncotree-consultation/scripts/search_oncotree_code.py" \
   -q 'combined hepatocellular and intrahepatic cholangiocarcinoma' \
   --json
 ```
 
 If you need to inspect a clinical sample file for missing OncoTree fields and suggested mappings:
 ```bash
-"$CBIO_ASSISTANT_REPO_ROOT/.venv/bin/python" \
-  "$CBIO_ASSISTANT_REPO_ROOT/hermes_skills/curator-oncotree-consultation/scripts/search_oncotree_code.py" \
-  --clinical-file "$CBIO_ASSISTANT_REPO_ROOT/studies/<PMCID>/curated/data_clinical_sample.txt" \
+"$CBIO_CURATION_ASSISTANT_HOME/.venv/bin/python" \
+  "$CBIO_CURATION_ASSISTANT_HOME/hermes_skills/curator-oncotree-consultation/scripts/search_oncotree_code.py" \
+  --clinical-file "$CBIO_CURATION_ASSISTANT_HOME/studies/<PMCID>/curated/data_clinical_sample.txt" \
   --json
 ```
 
@@ -70,3 +57,4 @@ If you need to inspect a clinical sample file for missing OncoTree fields and su
 ## Important rule
 
 The OncoTree search tool returns candidate mappings only. It does not make the final mapping decision. The agent must inspect the candidate metadata and select the mapping that best preserves the source meaning.
+

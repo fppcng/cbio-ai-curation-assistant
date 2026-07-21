@@ -1,6 +1,9 @@
 ---
 name: curator-clinical-files-creation
 description: Create cBioPortal clinical data files from study publications, supplementary materials, and other available study artifacts. Use during the curation of a complete cBioPortal study or when the user specifically asks to generate, curate, or update only the clinical data files.
+required_environment_variables:
+  - name: CBIO_CURATION_ASSISTANT_HOME
+    prompt: Absolute path to the cBioPortal AI Curation Assistant installation directory
 ---
 
 # Workflow

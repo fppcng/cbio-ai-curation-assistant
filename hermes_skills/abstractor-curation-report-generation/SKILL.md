@@ -1,41 +1,30 @@
 ---
 name: abstractor-curation-report-generation
 description: Use this skill when asked to generate or regenerate a cBioPortal curation report PDF from local paper XML/PDF inputs and a chosen set of local supplementary files, using the repository deterministic report-generation script.
+required_environment_variables:
+  - name: CBIO_CURATION_ASSISTANT_HOME
+    prompt: Absolute path to the cBioPortal AI Curation Assistant installation directory
 ---
 
-# cBioPortal curation report generation
+# Abstractor curation report generation
 
 ## When to use
-Use this skill when the user asks to generate or regenerate a cBioPortal curation report from local study artifacts that already exist on disk.
-
-## Prerequisites - Environment verification
-
-Before running the workflow, verify that the Hermes environment has loaded the required repository root.
-
-Run:
-
-test -n "$CBIO_ASSISTANT_REPO_ROOT"
-test -d "$CBIO_ASSISTANT_REPO_ROOT"
-test -x "$CBIO_ASSISTANT_REPO_ROOT/.venv/bin/python"
-
-printf 'CBIO_ASSISTANT_REPO_ROOT=%s\n' "$CBIO_ASSISTANT_REPO_ROOT"
-
-If any check fails, stop and report that the Hermes environment was not loaded correctly or that CBIO_ASSISTANT_REPO_ROOT does not point to a valid repository.
+Use this skill when the user asks or you need to generate or regenerate a cBioPortal curation report from local study artifacts that already exist on disk.
 
 ## Core rules
 - Never invent paper or supplementary paths. Use only files that exist locally.
 - Pass exactly one paper source to the script: `--paper-pdf` or `--paper-xml`.
-- Save report artifacts under `$CBIO_ASSISTANT_REPO_ROOT/studies/<PMCID>/reports/` whenever the inputs belong to a single study, using recognizable default names like `<study_id>_abstractor_report.pdf` and `<study_id>_abstractor_report.json`.
+- Save report artifacts under `$CBIO_CURATION_ASSISTANT_HOME/studies/<PMCID>/reports/` whenever the inputs belong to a single study, using recognizable default names like `<study_id>_abstractor_report.pdf` and `<study_id>_abstractor_report.json`.
 - Use LLM-backed metadata extraction when configuration is available; otherwise allow the script to fall back deterministically without LLM.
 - It is acceptable to return or attach the generated PDF to the user when the run succeeds.
 
-## Workflow
+## Procedure
 1. Locate the local paper source and the supplementary files that should be included.
 2. If the user provided only a PMID or PMCID and no local study artifacts exist yet, report that the required local inputs are missing.
-3. Treat `$CBIO_ASSISTANT_REPO_ROOT/studies/<PMCID>/reports/` as the canonical report directory for the study.
+3. Treat `$CBIO_CURATION_ASSISTANT_HOME/studies/<PMCID>/reports/` as the canonical report directory for the study.
 4. Run the repository report-generation script from the repo root using the project virtual environment:
-cd "$CBIO_ASSISTANT_REPO_ROOT"
-`"$CBIO_ASSISTANT_REPO_ROOT/.venv/bin/python" \`
+cd "$CBIO_CURATION_ASSISTANT_HOME"
+`"$CBIO_CURATION_ASSISTANT_HOME/.venv/bin/python" \`
   `hermes_skills/abstractor-curation-report-generation/scripts/abstractor_report_generator.py \`
   `--paper-xml <paper_xml_path> \`
   `--supp <supp_path_1> <supp_path_2>`
@@ -43,14 +32,13 @@ cd "$CBIO_ASSISTANT_REPO_ROOT"
 7. When the paper source is a PDF, use `--paper-pdf` instead of `--paper-xml`.
 8. If the script cannot infer a unique study root from the paper and supplementary paths, pass `--output-dir /home/cbio26/cbio-ai-curation-assistant/studies/<PMCID>/reports` explicitly.
 9. If you need a fixed PDF filename, pass `--output-pdf` with an absolute path inside the study reports/ directory:
-`--output-pdf "$CBIO_ASSISTANT_REPO_ROOT/studies/<PMCID>/reports/<study_id>_abstractor_report.pdf"`
+`--output-pdf "$CBIO_CURATION_ASSISTANT_HOME/studies/<PMCID>/reports/<study_id>_abstractor_report.pdf"`
 10. If you need a fixed JSON filename, pass `--output-json` with an absolute path inside the study reports/ directory:
-`--output-json "$CBIO_ASSISTANT_REPO_ROOT/studies/<PMCID>/reports/<study_id>_abstractor_report.json"`
+`--output-json "$CBIO_CURATION_ASSISTANT_HOME/studies/<PMCID>/reports/<study_id>_abstractor_report.json"`
 11. After the run, verify the generated PDF and JSON paths on disk.
 
 ## What the abstractor_report_generator.py script owns
 The script deterministically handles:
-
 - validation that exactly one paper source was provided
 - supplementary path expansion and filtering of supported file types
 - local paper path resolution
