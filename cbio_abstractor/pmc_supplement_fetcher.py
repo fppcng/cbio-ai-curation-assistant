@@ -178,7 +178,7 @@ def detect_pubmed_identifier_type(identifier: str) -> str | None:
     value = (identifier or "").strip()
     if re.fullmatch(r"PMC\d+", value, flags=re.IGNORECASE):
         return "PMCID"
-    if re.fullmatch(r"\d+", value):
+    if re.fullmatch(r"PMID\d+", value, flags=re.IGNORECASE):
         return "PMID"
     return None
 
