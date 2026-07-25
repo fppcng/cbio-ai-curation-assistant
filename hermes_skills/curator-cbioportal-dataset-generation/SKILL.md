@@ -34,19 +34,20 @@ required_environment_variables:
 3. Ensure that the abstractor report is available.
   - Check for: `<CBIO_CURATION_ASSISTANT_HOME>/studies/<PMCID>/reports/<study_id>_abstractor_report.json`
   - If it is missing, use the `abstractor-curation-report-generation` skill.
-4. Generate the clinical data of the study using the `curator-clinical-files-creation` skill.
-5. Generate the mutation data of the study using the `curator-mutation-data-file-creation` skill.
-6. Generate any additional cBioPortal files supported by the available evidence.
+4. Generate the clinical files of the study using the `curator-clinical-files-creation` skill.
+5. Generate the mutation files of the study using the `curator-mutation-data-file-creation` skill.
+6. Generate the structural variant file of the study using the `curator-structural-variant-files-creation` skill.
+7. Generate any additional cBioPortal files supported by the available evidence.
   - Use delegated skills when they exist for the file type.
   - Otherwise follow cBioPortal_Data_Curation_SOP and cBioPortal_File_Formats directly.
-7. Save all generated cBioPortal data and metadata files under: `<CBIO_CURATION_ASSISTANT_HOME>/studies/<PMCID>/curated/`.
-8. Validate the generated dataset.
+8. Save all generated cBioPortal data and metadata files under: `<CBIO_CURATION_ASSISTANT_HOME>/studies/<PMCID>/curated/`.
+9. Validate the generated dataset.
   - Run the cBioPortal validator against: `<CBIO_CURATION_ASSISTANT_HOME>/studies/<PMCID>/curated/`
   - Write validator artifacts under: `<CBIO_CURATION_ASSISTANT_HOME>/studies/<PMCID>/validation/`
   - Interpret validator results carefully: a warning-only run may return a non-zero exit code, so use the validator summary text as well as the exit status.
   - Do not claim successful validation unless the validator output has been reviewed.
   - If the validator cannot be executed, report the blocker explicitly.
-9. Report the final outcome to the user.
+10. Report the final outcome to the user.
   - List the generated files.
   - List omitted or unsupported files.
   - List assumptions, warnings, and unresolved issues.
