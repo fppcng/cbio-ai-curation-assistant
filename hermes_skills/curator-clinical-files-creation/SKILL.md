@@ -8,23 +8,25 @@ required_environment_variables:
 
 # Workflow
 1. Read the documentation in references/ to understand the required structure and formatting of cBioPortal clinical data files.
-2. Read the abstractor report of the study to identify the contents and structure of the available supplementary files. If the abstractor report is not present generate the study with the skill `abstractor-curation-report-generation`
-3. Select and inspect the supplementary files that may contain clinical data based on:
+2. Read the abstractor report of the study to identify the contents and structure of the available supplementary files. Use it as supporting context, not as a substitute for inspecting the source files directly. If the abstractor report is not present generate the study with the skill `abstractor-curation-report-generation`
+3. Select the supplementary files that may contain clinical data based on:
   - the abstractor report;
   - filenames;
   - file formats;
   - sheet, table, and column names.
-4. For every clinical column found in the source files, run `scripts/consult_clinical_dictionary.py` using the source column name. Review the returned candidates to determine:
+4. Read the selected supplementary files directly to determine their actual contents and whether they support generation of the clinical files. Do not decide that a file can or cannot be used based only on the abstractor report, filenames, or sheet names.
+5. When the source is an Excel workbook, inspect any cell comments, notes, or annotations that are present. Treat them as potentially important source context for interpreting headers, values, exclusions, or sheet-level meaning.
+6. For every clinical column found in the source files, run `scripts/consult_clinical_dictionary.py` using the source column name. Review the returned candidates to determine:
   - the standard cBioPortal column header;
   - whether the attribute belongs in `data_clinical_sample.txt` or `data_clinical_patient.txt`;
   - the datatype, display name, and description.
 Select a candidate only when its meaning matches the source attribute. Do not choose a result based only on name similarity. If no candidate preserves the source meaning, create an appropriate custom attribute.
-5. Generate:
+7. Generate:
   - meta_clinical_sample.txt;
   - data_clinical_sample.txt;
   - meta_clinical_patient.txt, only when patient-level data is available.
   - data_clinical_patient.txt, only when patient-level data is available.
-6. Ensure identifiers are consistent, attributes are placed at the correct level, and no unsupported mappings or transformations are introduced.
+8. Ensure identifiers are consistent, attributes are placed at the correct level, and no unsupported mappings or transformations are introduced.
 
 ## SOMATIC_STATUS Column
 - `SOMATIC_STATUS` must be included in `data_clinical_sample.txt` and assigned to each tumor sample.
