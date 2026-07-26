@@ -4,3 +4,10 @@
 /cbioportal_dataset
 __pycache__/
 *.pyc
+/cbio_curation_assistant/api_config.py
+/cbio_curation_assistant/vector_store/
+/cbio_curation_assistant/experiments/
+/cbio_curation_assistant/metadata_inputs/
+/cbio_curation_assistant/pdf_metadata_outputs/
+/cbio_curation_assistant/xml_metadata_outputs/
+/cbio_curation_assistant/prompts/

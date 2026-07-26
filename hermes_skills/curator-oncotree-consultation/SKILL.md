@@ -37,7 +37,7 @@ If you need to inspect a clinical sample file for missing OncoTree fields and su
 ```bash
 "$CBIO_CURATION_ASSISTANT_HOME/.venv/bin/python" \
   "$CBIO_CURATION_ASSISTANT_HOME/hermes_skills/curator-oncotree-consultation/scripts/search_oncotree_code.py" \
-  --clinical-file "$CBIO_CURATION_ASSISTANT_HOME/studies/<PMCID>/curated/data_clinical_sample.txt" \
+  --clinical-file "$CBIO_CURATION_ASSISTANT_HOME/studies/<study_id>/curated/data_clinical_sample.txt" \
   --json
 ```
 

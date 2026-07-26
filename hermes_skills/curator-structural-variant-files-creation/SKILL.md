@@ -36,27 +36,27 @@ At minimum, each emitted row must have:
   - `Site2_Hugo_Symbol` or `Site2_Entrez_Gene_Id`
 
 ## Workflow
-1. Use `studies/<PMCID>/curated/` as the canonical output workspace.
-2. Ensure study source artifacts are available under `studies/<PMCID>/raw/`.
+1. Use `studies/<study_id>/curated/` as the canonical output workspace.
+2. Ensure study source artifacts are available under `studies/<study_id>/source/`.
   - If the required publication or supplementary files are missing, use the `abstractor-study-download` skill.
-3. Ensure the study abstractor report is available under `studies/<PMCID>/reports/`.
+3. Ensure the study abstractor report is available under `studies/<study_id>/reports/`.
   - If the abstractor report is missing, use the `abstractor-curation-report-generation` skill.
 4. Read the abstractor report of the study to identify the contents and structure of the available supplementary files. Use it as supporting context, not as a substitute for inspecting the source files directly.
 5. Read the candidate supplementary files directly to determine their actual contents and whether they contain real per-sample rows that satisfy the minimum evidence requirements. Do not make that decision from the abstractor report alone.
   - When a candidate file is an Excel workbook, inspect any cell comments, notes, or annotations that may affect interpretation of the data.
 6. Determine whether the source contains real per-sample rows that satisfy the minimum evidence requirements.
   - If not, do not create the structural variant files; report that the study does not currently support source-grounded SV curation.
-7. Normalize sample identifiers against `studies/<PMCID>/curated/data_clinical_sample.txt` when that file already exists.
+7. Normalize sample identifiers against `studies/<study_id>/curated/data_clinical_sample.txt` when that file already exists.
   - Do not silently rewrite sample identifiers to values that cannot be traced back to the source or clinical sample file.
   - If the source uses a trivially different delimiter form (for example `-` in one sheet and `_` in the clinical sample file) and the mapping is one-to-one, normalize it explicitly and report that normalization.
 8. Determine the study genome build from the study metadata or the source artifacts before writing `NCBI_Build`.
   - If the source rows would require mixed builds or the build cannot be determined for rows that need it, report the issue instead of guessing.
-9. Create `studies/<PMCID>/curated/data_sv.txt`.
+9. Create `studies/<study_id>/curated/data_sv.txt`.
   - Include the required columns for every emitted row.
   - Add optional columns only when they are directly supported by the source data.
   - When the source provides fusion-partner genes but not breakpoint-level detail, it is acceptable to create rows with the supported gene-site fields only.
   - Preserve source meaning when mapping into cBioPortal fields such as `Class`, `Event_Info`, `Annotation`, `Connection_Type`, and read-support columns.
-10. Create `studies/<PMCID>/curated/meta_sv.txt` with cBioPortal-compliant structural variant metadata.
+10. Create `studies/<study_id>/curated/meta_sv.txt` with cBioPortal-compliant structural variant metadata.
   - Use `genetic_alteration_type: STRUCTURAL_VARIANT`
   - Use `datatype: SV`
   - Use `stable_id: structural_variants`
@@ -72,7 +72,7 @@ At minimum, each emitted row must have:
   - Remove or blank obviously invalid pseudo-gene values before writing `Site1_Hugo_Symbol` / `Site2_Hugo_Symbol` (for example numeric placeholders or Excel-mangled non-symbol artifacts) unless you can map them confidently to a real supported gene symbol.
 
 ## Output
-Report these outcomes under `studies/<PMCID>/curated/`:
+Report these outcomes under `studies/<study_id>/curated/`:
 - `data_sv.txt` when source-supported structural variant rows were generated
 - `meta_sv.txt` when a structural variant profile was generated
 - whether the study had sufficient evidence for structural variant curation

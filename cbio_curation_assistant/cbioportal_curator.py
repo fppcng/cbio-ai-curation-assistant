@@ -21,9 +21,8 @@ Public API
 
 from __future__ import annotations
 
-import io
+
 import os
-import re
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -37,13 +36,13 @@ from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 
-from spec_match import classify_sheet, ClassificationResult
-from cbioportal_spec import SPEC_BY_KEY
-from config import LLMConfig, build_llm_config_from_legacy_model
-from llm_client import call_llm_with_retry, parse_llm_json
-from xml_metadata import extract_metadata_from_xml as _extract_metadata_from_xml
-from xml_metadata import extract_xml_llm_text
-from xml_metadata import extract_xml_text
+from cbio_curation_assistant.spec_match import classify_sheet, ClassificationResult
+from cbio_curation_assistant.cbioportal_spec import SPEC_BY_KEY
+from cbio_curation_assistant.config import LLMConfig, build_llm_config_from_legacy_model
+from cbio_curation_assistant.llm_client import call_llm_with_retry, parse_llm_json
+from cbio_curation_assistant.xml_metadata import extract_metadata_from_xml as _extract_metadata_from_xml
+from cbio_curation_assistant.xml_metadata import extract_xml_llm_text
+from cbio_curation_assistant.xml_metadata import extract_xml_text
 
 # ─────────────────────────────────────────────────────────────
 # Constants

@@ -4,8 +4,7 @@ Generate a cBioPortal curation report from a local paper PDF or XML file and loc
 Example
 -------
     python hermes_skills/abstractor-curation-report-generation/scripts/abstractor_report_generator.py \
-        --paper-xml /path/to/article.xml \
-        --supp /path/to/supp_dir
+        --study-id <study_id>
 """
 
 from __future__ import annotations
@@ -24,39 +23,36 @@ _REPO_ROOT_ENV = "CBIO_ASSISTANT_REPO_ROOT"
 
 def _get_repo_root() -> Path:
     raw_repo_root = os.environ.get(_REPO_ROOT_ENV)
-    if not raw_repo_root:
-        raise RuntimeError(
-            f"Missing required environment variable {_REPO_ROOT_ENV}. "
-            "Make sure Hermes loaded its environment before running this script."
-        )
+    if raw_repo_root:
+        repo_root = Path(raw_repo_root).expanduser().resolve()
+    else:
+        repo_root = Path(__file__).resolve().parents[3]
 
-    repo_root = Path(raw_repo_root).expanduser().resolve()
     if not repo_root.is_dir():
         raise RuntimeError(
-            f"{_REPO_ROOT_ENV} does not point to an existing directory: {repo_root}"
+            f"Unable to resolve repository root from {_REPO_ROOT_ENV} or script location: {repo_root}"
         )
 
     return repo_root
 
 
 _REPO_ROOT = _get_repo_root()
-_MODULE_ROOT = _REPO_ROOT / "cbio_abstractor"
-if str(_MODULE_ROOT) not in sys.path:
-    sys.path.insert(0, str(_MODULE_ROOT))
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
-from cbioportal_curator import _analyse_supplementary_files, _extract_metadata_llm, _extract_pdf_text  # noqa: E402
-from cli_shared import extract_xml_metadata_with_llm  # noqa: E402
-from config import LLMConfig, PROVIDER_SPECS, get_provider_default_config, get_provider_names  # noqa: E402
-from pdf_report import (  # noqa: E402
+from cbio_curation_assistant.cbioportal_curator import _analyse_supplementary_files, _extract_metadata_llm, _extract_pdf_text  # noqa: E402
+from cbio_curation_assistant.cli_shared import extract_xml_metadata_with_llm  # noqa: E402
+from cbio_curation_assistant.config import LLMConfig, PROVIDER_SPECS, get_provider_default_config, get_provider_names  # noqa: E402
+from cbio_curation_assistant.pdf_report import (  # noqa: E402
     build_curation_report_json,
     save_curation_report_pdf,
 )
-from pmc_supplement_fetcher import SUPPORTED_SUPPLEMENT_EXTENSIONS  # noqa: E402
+from cbio_curation_assistant.pmc_supplement_fetcher import SUPPORTED_SUPPLEMENT_EXTENSIONS  # noqa: E402
+from cbio_curation_assistant.workspace import InvalidStudyIdError, StudyWorkspace, WorkspaceConfigurationError  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
 _LLM_DISCOVERY_ORDER = ("LiteLLM", "OpenAI", "Anthropic")
-_REPORTS_DIRNAME = "reports"
 _DEFAULT_REPORT_SUFFIX = "abstractor_report"
 
 
@@ -165,6 +161,7 @@ def _expand_supplementary_paths(
     *,
     recursive: bool = False,
 ) -> list[str]:
+    
     resolved_paths: list[str] = []
     seen: set[str] = set()
 
@@ -191,6 +188,7 @@ def _expand_supplementary_paths(
             for path in iterator
             if _is_supported_supplementary_file(path)
         )
+        
         for path in matching_files:
             value = str(path)
             if value not in seen:
@@ -201,6 +199,26 @@ def _expand_supplementary_paths(
         raise ValueError("No supported supplementary files were found.")
 
     return resolved_paths
+
+
+def _resolve_study_inputs(study_id: str) -> tuple[StudyWorkspace, str | None, str | None, list[str]]:
+    workspace = StudyWorkspace.load(study_id)
+    paper_xml_path = workspace.article_xml_path if workspace.article_xml_path.is_file() else None
+    paper_pdf_path = workspace.article_pdf_path if workspace.article_pdf_path.is_file() else None
+
+    if paper_xml_path is None and paper_pdf_path is None:
+        raise FileNotFoundError(
+            "No canonical article source was found in the study workspace. "
+            f"Expected {workspace.article_xml_path} or {workspace.article_pdf_path}."
+        )
+
+    supplementary_paths = _expand_supplementary_paths([workspace.supplementary_dir], recursive=True)
+    return (
+        workspace,
+        str(paper_pdf_path.resolve()) if paper_pdf_path is not None else None,
+        str(paper_xml_path.resolve()) if paper_xml_path is not None else None,
+        supplementary_paths,
+    )
 
 
 def _build_summary(meta: dict[str, Any], records: list[dict[str, Any]], supp_paths: Sequence[str]) -> dict[str, Any]:
@@ -336,13 +354,13 @@ def _extract_pdf_metadata(
 def _build_report_stem(
     meta: dict[str, Any],
     summary: dict[str, Any],
-    study_root: Path | None,
+    study_workspace: StudyWorkspace | None,
 ) -> str:
     study_id = str(meta.get("study_id_suggestion") or "").strip()
     if not study_id or study_id == "—":
         study_id = str(summary.get("study_id") or "").strip()
     if not study_id or study_id == "—":
-        study_id = study_root.name if study_root is not None else "cbioportal_curation"
+        study_id = study_workspace.study_id if study_workspace is not None else "cbioportal_curation"
 
     stem = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in study_id).strip("._")
     return f"{stem or 'cbioportal_curation'}_{_DEFAULT_REPORT_SUFFIX}"
@@ -351,38 +369,47 @@ def _build_report_stem(
 def _build_report_pdf_filename(
     meta: dict[str, Any],
     summary: dict[str, Any],
-    study_root: Path | None,
+    study_workspace: StudyWorkspace | None,
 ) -> str:
-    return _build_report_stem(meta, summary, study_root) + ".pdf"
+    return _build_report_stem(meta, summary, study_workspace) + ".pdf"
 
 
 def _build_report_json_filename(
     meta: dict[str, Any],
     summary: dict[str, Any],
-    study_root: Path | None,
+    study_workspace: StudyWorkspace | None,
 ) -> str:
-    return _build_report_stem(meta, summary, study_root) + ".json"
+    return _build_report_stem(meta, summary, study_workspace) + ".json"
 
 
-def _infer_study_root(paths: Sequence[str | Path]) -> Path | None:
-    study_roots: set[Path] = set()
+def _infer_study_workspace(paths: Sequence[str | Path]) -> StudyWorkspace | None:
+    study_workspaces: dict[Path, StudyWorkspace] = {}
 
     for raw_path in paths:
         candidate = Path(raw_path).expanduser().resolve()
         for ancestor in (candidate, *candidate.parents):
-            if ancestor.parent.name == "studies":
-                study_roots.add(ancestor)
+            if ancestor.parent.name != "studies":
+                continue
+            try:
+                workspace = StudyWorkspace.load(
+                    ancestor.name,
+                    assistant_home=ancestor.parent.parent,
+                )
+            except (InvalidStudyIdError, WorkspaceConfigurationError):
+                continue
+            if workspace.contains(candidate):
+                study_workspaces[workspace.root] = workspace
                 break
 
-    if len(study_roots) == 1:
-        return next(iter(study_roots))
+    if len(study_workspaces) == 1:
+        return next(iter(study_workspaces.values()))
     return None
 
 
 def _resolve_output_pdf_path(
     output_pdf_path: str | None,
     output_dir: str | None,
-    study_root: Path | None,
+    study_workspace: StudyWorkspace | None,
     meta: dict[str, Any],
     summary: dict[str, Any],
 ) -> str | None:
@@ -390,9 +417,9 @@ def _resolve_output_pdf_path(
         return str(Path(output_pdf_path).expanduser().resolve())
     if output_dir:
         directory = Path(output_dir).expanduser().resolve()
-        return str(directory / _build_report_pdf_filename(meta, summary, study_root))
-    if study_root is not None:
-        return str((study_root / _REPORTS_DIRNAME / _build_report_pdf_filename(meta, summary, study_root)).resolve())
+        return str((directory / _build_report_pdf_filename(meta, summary, study_workspace)).resolve())
+    if study_workspace is not None:
+        return str((study_workspace.reports_dir / _build_report_pdf_filename(meta, summary, study_workspace)).resolve())
     return None
 
 
@@ -400,7 +427,7 @@ def _resolve_output_json_path(
     output_json_path: str | None,
     output_pdf_path: str | None,
     output_dir: str | None,
-    study_root: Path | None,
+    study_workspace: StudyWorkspace | None,
     meta: dict[str, Any],
     summary: dict[str, Any],
 ) -> str | None:
@@ -410,9 +437,9 @@ def _resolve_output_json_path(
         return str(Path(output_pdf_path).with_suffix(".json").resolve())
     if output_dir:
         directory = Path(output_dir).expanduser().resolve()
-        return str((directory / _build_report_json_filename(meta, summary, study_root)).resolve())
-    if study_root is not None:
-        return str((study_root / _REPORTS_DIRNAME / _build_report_json_filename(meta, summary, study_root)).resolve())
+        return str((directory / _build_report_json_filename(meta, summary, study_workspace)).resolve())
+    if study_workspace is not None:
+        return str((study_workspace.reports_dir / _build_report_json_filename(meta, summary, study_workspace)).resolve())
     return None
 
 
@@ -428,6 +455,7 @@ def run_curation_orchestrator(
     paper_pdf_path: str | None = None,
     paper_xml_path: str | None = None,
     supplementary_paths: Sequence[str | Path] | None = None,
+    study_workspace: StudyWorkspace | None = None,
     llm_config: LLMConfig | None = None,
     provider: str | None = None,
     api_key: str | None = None,
@@ -505,17 +533,18 @@ def run_curation_orchestrator(
             "supplementary_paths": supp_paths,
         }
 
-    study_root = _infer_study_root([paper_path, *supp_paths])
+    if study_workspace is None:
+        study_workspace = _infer_study_workspace([paper_path, *supp_paths])
 
     records = _analyse_supplementary_files(supp_paths)
     summary = _build_summary(meta, records, supp_paths)
 
-    resolved_output_pdf_path = _resolve_output_pdf_path(output_pdf_path, output_dir, study_root, meta, summary)
+    resolved_output_pdf_path = _resolve_output_pdf_path(output_pdf_path, output_dir, study_workspace, meta, summary)
     resolved_output_json_path = _resolve_output_json_path(
         output_json_path=output_json_path,
         output_pdf_path=resolved_output_pdf_path if generate_pdf else None,
         output_dir=output_dir,
-        study_root=study_root,
+        study_workspace=study_workspace,
         meta=meta,
         summary=summary,
     )
@@ -534,7 +563,7 @@ def run_curation_orchestrator(
         "summary": summary,
         "pdf_path": pdf_path,
         "report_json_path": report_json_path,
-        "study_root": str(study_root) if study_root is not None else None,
+        "study_root": str(study_workspace.root) if study_workspace is not None else None,
         "warnings": warnings,
         "inputs": inputs,
         "llm": {
@@ -549,23 +578,16 @@ def run_curation_orchestrator(
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Generate a cBioPortal curation report from local paper and supplementary files.",
+        description=(
+            "Generate a cBioPortal curation report from the canonical article and supplementary "
+            "files in a study workspace."
+        ),
     )
 
-    source_group = parser.add_mutually_exclusive_group(required=True)
-    source_group.add_argument("--paper-pdf", help="Path to the main paper PDF.")
-    source_group.add_argument("--paper-xml", help="Path to the main paper XML/NXML.")
-
     parser.add_argument(
-        "--supp",
-        nargs="+",
+        "--study-id",
         required=True,
-        help="Supplementary file paths or directories.",
-    )
-    parser.add_argument(
-        "--recursive-supp",
-        action="store_true",
-        help="When a supplementary path is a directory, search it recursively.",
+        help="Canonical study workspace key used to resolve the workspace under $CBIO_CURATION_ASSISTANT_HOME/studies/.",
     )
 
     parser.add_argument(
@@ -582,28 +604,9 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--api-mode", help="Override the provider API mode.")
 
     parser.add_argument(
-        "--output-pdf",
-        help=(
-            "Full output path for the generated PDF report. When omitted, the script prefers "
-            "studies/<PMCID>/reports/<study_id>_abstractor_report.pdf if it can infer a unique study root."
-        ),
-    )
-    parser.add_argument(
-        "--output-dir",
-        help="Directory where the PDF and JSON reports should be created if --output-pdf is not set.",
-    )
-    parser.add_argument(
         "--no-pdf",
         action="store_true",
         help="Skip PDF report generation.",
-    )
-    parser.add_argument(
-        "--output-json",
-        help=(
-            "Optional file path where the cBioPortal curation report JSON will be written. "
-            "When omitted, the script persists JSON automatically as <study_id>_abstractor_report.json "
-            "when an output PDF path, output directory, or unique study root is available."
-        ),
     )
     parser.add_argument(
         "--log-level",
@@ -625,20 +628,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
 
     try:
+        study_workspace, paper_pdf_path, paper_xml_path, supplementary_paths = _resolve_study_inputs(args.study_id)
         result = run_curation_orchestrator(
-            paper_pdf_path=args.paper_pdf,
-            paper_xml_path=args.paper_xml,
-            supplementary_paths=args.supp,
+            paper_pdf_path=paper_pdf_path,
+            paper_xml_path=paper_xml_path,
+            supplementary_paths=supplementary_paths,
+            study_workspace=study_workspace,
             provider=args.provider,
             api_key=args.api_key,
             model=args.model,
             base_url=args.base_url,
             api_mode=args.api_mode,
-            recursive_supplementary_search=args.recursive_supp,
             generate_pdf=not args.no_pdf,
-            output_pdf_path=args.output_pdf,
-            output_dir=args.output_dir,
-            output_json_path=args.output_json,
         )
     except Exception as exc:
         logger.error("%s", exc)

@@ -11,7 +11,7 @@ The script is intended to be called by a Hermes skill. It:
 
 Example:
     python run_genome_nexus.py \
-        --workspace CBIO_ASSISTANT_REPO_ROOT/studies/PMC1234567/curated \
+        --study-id <study_id> \
         --genome-build GRCh37
 """
 
@@ -26,6 +26,18 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Iterable
+
+
+def _get_repo_root() -> Path:
+    return Path(__file__).resolve().parents[3]
+
+
+_REPO_ROOT = _get_repo_root()
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+
+from cbio_curation_assistant.workspace import StudyWorkspace
 
 
 DEFAULT_IMAGE = (
@@ -55,10 +67,9 @@ def parse_args() -> argparse.Namespace:
         description="Annotate the canonical minimal MAF in a study workspace."
     )
     parser.add_argument(
-        "--workspace",
+        "--study-id",
         required=True,
-        type=Path,
-        help="Study curated directory mounted read/write into the container.",
+        help="Canonical study workspace key used to resolve the curated workspace.",
     )
     parser.add_argument(
         "--genome-build",
@@ -208,11 +219,15 @@ def canonical_paths(workspace: Path) -> dict[str, Path]:
     }
 
 
+def resolve_workspace(study_id: str) -> Path:
+    return StudyWorkspace.load(study_id).curated_dir
+
+
 def main() -> int:
     args = parse_args()
 
     try:
-        workspace = args.workspace.expanduser().resolve()
+        workspace = resolve_workspace(args.study_id).resolve()
         if not workspace.is_dir():
             raise PipelineError(f"Workspace does not exist: {workspace}")
 

@@ -14,7 +14,8 @@ from typing import Callable
 from dotenv import load_dotenv
 
 _HERE = Path(__file__).resolve().parent
-load_dotenv(_HERE / ".env", override=False)
+_REPO_ROOT = _HERE.parent
+load_dotenv(_REPO_ROOT / ".env", override=False)
 
 ProviderName = str
 ValueLoader = Callable[[str, str], str]

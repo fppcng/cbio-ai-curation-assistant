@@ -6,7 +6,7 @@ import time
 import re
 from typing import Any
 
-from config import LITELLM_REASONING_EFFORT, LLMConfig, build_llm_config
+from cbio_curation_assistant.config import LITELLM_REASONING_EFFORT, LLMConfig, build_llm_config
 
 logger = logging.getLogger(__name__)
 

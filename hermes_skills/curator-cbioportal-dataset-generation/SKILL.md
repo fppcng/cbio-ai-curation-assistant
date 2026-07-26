@@ -29,10 +29,10 @@ required_environment_variables:
 ## Workflow
 1. Read the documentation under `${HERMES_SKILL_DIR}/references`.
 2. Ensure that the study source artifacts are available.
-  - Check for source data under: `<CBIO_CURATION_ASSISTANT_HOME>/studies/<PMCID>/raw/`
+  - Check for source data under: `<CBIO_CURATION_ASSISTANT_HOME>/studies/<study_id>/source/`
   - If the required publication or supplementary files are missing, use the `abstractor-study-download` skill.
 3. Ensure that the abstractor report is available.
-  - Check for: `<CBIO_CURATION_ASSISTANT_HOME>/studies/<PMCID>/reports/<study_id>_abstractor_report.json`
+  - Check for: `<CBIO_CURATION_ASSISTANT_HOME>/studies/<study_id>/reports/<study_id>_abstractor_report.json`
   - If it is missing, use the `abstractor-curation-report-generation` skill.
 4. Generate the clinical files of the study using the `curator-clinical-files-creation` skill.
 5. Generate the mutation files of the study using the `curator-mutation-data-file-creation` skill.
@@ -40,10 +40,10 @@ required_environment_variables:
 7. Generate any additional cBioPortal files supported by the available evidence.
   - Use delegated skills when they exist for the file type.
   - Otherwise follow cBioPortal_Data_Curation_SOP and cBioPortal_File_Formats directly.
-8. Save all generated cBioPortal data and metadata files under: `<CBIO_CURATION_ASSISTANT_HOME>/studies/<PMCID>/curated/`.
+8. Save all generated cBioPortal data and metadata files under: `<CBIO_CURATION_ASSISTANT_HOME>/studies/<study_id>/curated/`.
 9. Validate the generated dataset.
-  - Run the cBioPortal validator against: `<CBIO_CURATION_ASSISTANT_HOME>/studies/<PMCID>/curated/`
-  - Write validator artifacts under: `<CBIO_CURATION_ASSISTANT_HOME>/studies/<PMCID>/validation/`
+  - Run the cBioPortal validator against: `<CBIO_CURATION_ASSISTANT_HOME>/studies/<study_id>/curated/`
+  - Write validator artifacts under: `<CBIO_CURATION_ASSISTANT_HOME>/studies/<study_id>/validation/`
   - Interpret validator results carefully: a warning-only run may return a non-zero exit code, so use the validator summary text as well as the exit status.
   - Do not claim successful validation unless the validator output has been reviewed.
   - If the validator cannot be executed, report the blocker explicitly.
@@ -59,9 +59,9 @@ required_environment_variables:
 From the `<CBIO_CURATION_ASSISTANT_HOME>`, validate the generated study with:
 ```bash
 ./.venv/bin/python cbioportal_core_validator/scripts/importer/validateData.py \
-  -s studies/<PMCID>/curated/ \
-  -html studies/<PMCID>/validation/validator_report.html \
-  -json studies/<PMCID>/validation/validator_report.json \
+  -s studies/<study_id>/curated/ \
+  -html studies/<study_id>/validation/validator_report.html \
+  -json studies/<study_id>/validation/validator_report.json \
   -n \
   -v
 ```
@@ -70,5 +70,5 @@ Interpret validator results carefully: a warning-only run may return a non-zero 
 
 ## Output expectations
 - The workflow should produce:
-  - A cBioPortal dataset under: `<CBIO_CURATION_ASSISTANT_HOME>/studies/<PMCID>/curated/`
-  - Validator artifacts under: `<CBIO_CURATION_ASSISTANT_HOME>/studies/<PMCID>/validation/`
+  - A cBioPortal dataset under: `<CBIO_CURATION_ASSISTANT_HOME>/studies/<study_id>/curated/`
+  - Validator artifacts under: `<CBIO_CURATION_ASSISTANT_HOME>/studies/<study_id>/validation/`

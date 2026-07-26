@@ -4,11 +4,11 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from cbioportal_curator import SYSTEM_PROMPT_CURATOR
-from config import LLMConfig, PROVIDER_SPECS, get_provider_default_config, get_provider_names
-from llm_client import call_llm_with_retry, parse_llm_json
-from metadata_merge import merge_missing_metadata_fields
-from xml_metadata import extract_metadata_from_xml, extract_xml_llm_text
+from cbio_curation_assistant.cbioportal_curator import SYSTEM_PROMPT_CURATOR
+from cbio_curation_assistant.config import LLMConfig, PROVIDER_SPECS, get_provider_default_config, get_provider_names
+from cbio_curation_assistant.llm_client import call_llm_with_retry, parse_llm_json
+from cbio_curation_assistant.metadata_merge import merge_missing_metadata_fields
+from cbio_curation_assistant.xml_metadata import extract_metadata_from_xml, extract_xml_llm_text
 
 
 def is_provider_configured(config: LLMConfig) -> bool:

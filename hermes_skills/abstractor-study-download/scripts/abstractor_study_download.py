@@ -4,13 +4,27 @@ import argparse
 import json
 import logging
 import os
+import re
 import shutil
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any, Sequence
 
-from cbio_abstractor.pmc_supplement_fetcher import (  
+
+
+def _get_repo_root() -> Path:
+    return Path(__file__).resolve().parents[3]
+
+
+_REPO_ROOT = _get_repo_root()
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+
+from cbio_curation_assistant.pmc_supplement_fetcher import (
     PMCRequestError,
+    ResolvedStudyIdentifier,
     SUPPORTED_SUPPLEMENT_EXTENSIONS,
     _article_pdf_url_from_article_html,
     _download_url,
@@ -20,21 +34,55 @@ from cbio_abstractor.pmc_supplement_fetcher import (
     _oa_package_url,
     download_pmc_supplements,
     normalize_pmcid,
-    resolve_study_identifier_to_pmcid,
+    pmid_to_pmcid,
 )
+from cbio_curation_assistant.workspace import StudyWorkspace, resolve_assistant_home
 
 logger = logging.getLogger(__name__)
 
-_STUDY_RAW_RELATIVE_PATH = Path("raw")
-_MANIFEST_RELATIVE_PATH = Path("manifest.json")
-_ARTICLE_SUBDIR = "article"
-_SUPPLEMENTARY_SUBDIR = "supplementary"
+DOWNLOAD_RESULT_VERSION = 1
 
 
-def _prepare_studies_root(studies_root: Path) -> Path:
-    resolved_root = studies_root.expanduser().resolve()
-    resolved_root.mkdir(parents=True, exist_ok=True)
-    return resolved_root
+def _resolve_study_workspace(
+    study_id: str,
+    *,
+    assistant_home: str | Path | None = None,
+) -> StudyWorkspace:
+    resolved_assistant_home = resolve_assistant_home(assistant_home or _REPO_ROOT)
+    return StudyWorkspace.from_study_id(
+        study_id,
+        assistant_home=resolved_assistant_home,
+    )
+
+
+def _resolve_download_identifier(
+    identifier: str,
+    identifier_type: str,
+) -> ResolvedStudyIdentifier:
+    normalized_type = (identifier_type or "").strip().upper()
+    raw_identifier = (identifier or "").strip()
+
+    if normalized_type == "PMCID":
+        normalized_identifier = normalize_pmcid(raw_identifier)
+        return ResolvedStudyIdentifier(
+            input_identifier=raw_identifier,
+            identifier_type="PMCID",
+            normalized_identifier=normalized_identifier,
+            pmcid=normalized_identifier,
+        )
+
+    if normalized_type == "PMID":
+        normalized_identifier = re.sub(r"\D", "", raw_identifier)
+        if not normalized_identifier:
+            raise ValueError("PMID must contain digits.")
+        return ResolvedStudyIdentifier(
+            input_identifier=raw_identifier,
+            identifier_type="PMID",
+            normalized_identifier=normalized_identifier,
+            pmcid=pmid_to_pmcid(normalized_identifier),
+        )
+
+    raise ValueError("identifier_type must be either 'pmid' or 'pmcid'.")
 
 
 def _write_json(path: Path, payload: Any) -> None:
@@ -81,14 +129,13 @@ def _find_article_pdf(directory: Path, pmcid: str) -> Path | None:
     return None
 
 
-def _ensure_xml(article_dir: Path, pmcid: str) -> tuple[Path, bool]:
-    xml_path = article_dir / f"{normalize_pmcid(pmcid)}.xml"
-    if xml_path.exists():
-        return xml_path.resolve(), True
+def _ensure_xml(article_xml_path: Path, pmcid: str) -> tuple[Path, bool]:
+    if article_xml_path.exists():
+        return article_xml_path.resolve(), True
 
     xml_text = _fetch_pmc_xml(pmcid)
-    xml_path.write_text(xml_text, encoding="utf-8")
-    return xml_path.resolve(), False
+    article_xml_path.write_text(xml_text, encoding="utf-8")
+    return article_xml_path.resolve(), False
 
 
 def _ensure_supplementary_files(
@@ -126,12 +173,11 @@ def _ensure_supplementary_files(
 
 
 def _ensure_article_pdf(
-    article_dir: Path,
+    article_pdf_path: Path,
     supplementary_dir: Path,
     pmcid: str,
     warnings: list[str],
 ) -> tuple[Path | None, bool]:
-    article_pdf_path = article_dir / _article_pdf_name(pmcid)
     if article_pdf_path.exists():
         return article_pdf_path.resolve(), True
 
@@ -190,96 +236,169 @@ def _ensure_article_pdf(
         return None, False
 
 
+def _build_file_record(
+    workspace: StudyWorkspace,
+    path: Path,
+    *,
+    reused: bool,
+) -> dict[str, Any]:
+    return {
+        "path": str(path.resolve()),
+        "relative_path": workspace.relative_to_root(path),
+        "present": path.is_file(),
+        "reused": reused,
+    }
+
+
+def _build_result_payload(
+    *,
+    workspace: StudyWorkspace,
+    resolved: ResolvedStudyIdentifier,
+    warnings: list[str],
+    xml_reused: bool,
+    supplementary_reused: bool,
+    article_pdf_reused: bool,
+    supplementary_paths: list[Path],
+) -> dict[str, Any]:
+    reused = {
+        "xml": xml_reused,
+        "supplementary": supplementary_reused,
+        "article_pdf": article_pdf_reused,
+    }
+    status = "partial_success" if warnings else "reused" if all(reused.values()) else "success"
+
+    xml_record = _build_file_record(
+        workspace,
+        workspace.article_xml_path,
+        reused=xml_reused,
+    )
+    article_pdf_record = _build_file_record(
+        workspace,
+        workspace.article_pdf_path,
+        reused=article_pdf_reused,
+    )
+    supplementary_files = [
+        _build_file_record(workspace, path, reused=supplementary_reused)
+        for path in supplementary_paths
+    ]
+
+    return {
+        "manifest_version": DOWNLOAD_RESULT_VERSION,
+        "status": status,
+        "study_id": workspace.study_id,
+        "study_manifest": workspace.relative_to_root(workspace.manifest_path),
+        "download_manifest": workspace.relative_to_root(workspace.download_manifest_path),
+        "workspace": {
+            "assistant_home": str(workspace.assistant_home),
+            "study_root": str(workspace.root.resolve()),
+            "source_dir": str(workspace.source_dir.resolve()),
+            "study_manifest": str(workspace.manifest_path.resolve()),
+            "download_manifest": str(workspace.download_manifest_path.resolve()),
+        },
+        "managed_paths": workspace.as_manifest_paths(),
+        "resolved_identifier": {
+            "input_identifier": resolved.input_identifier,
+            "identifier_type": resolved.identifier_type,
+            "normalized_identifier": resolved.normalized_identifier,
+            "pmid": resolved.normalized_identifier if resolved.identifier_type == "PMID" else None,
+            "pmcid": resolved.pmcid,
+        },
+        "artifacts": {
+            "xml_path": xml_record["relative_path"],
+            "article_pdf_path": article_pdf_record["relative_path"] if article_pdf_record["present"] else None,
+            "supplementary_paths": [record["relative_path"] for record in supplementary_files],
+            "xml_present": xml_record["present"],
+            "article_pdf_present": article_pdf_record["present"],
+            "supplementary_count": len(supplementary_files),
+        },
+        "artifact_details": {
+            "xml": xml_record,
+            "article_pdf": article_pdf_record,
+            "supplementary": {
+                "directory": str(workspace.supplementary_dir.resolve()),
+                "relative_directory": workspace.relative_to_root(workspace.supplementary_dir),
+                "present": workspace.supplementary_dir.is_dir(),
+                "reused": supplementary_reused,
+                "count": len(supplementary_files),
+                "files": supplementary_files,
+            },
+        },
+        "warnings": warnings,
+        "reused": reused,
+    }
+
+
 def run_study_download(
     *,
     identifier: str,
-    studies_root: Path,
+    identifier_type: str,
+    assistant_home: str | Path | None = None,
 ) -> dict[str, Any]:
-    
-    resolved = resolve_study_identifier_to_pmcid(identifier)
-    studies_root = _prepare_studies_root(studies_root)
+    resolved = _resolve_download_identifier(identifier, identifier_type)
+    workspace = _resolve_study_workspace(
+        resolved.pmcid,
+        assistant_home=assistant_home,
+    )
+    workspace.write_manifest()
 
-    study_root = studies_root / resolved.pmcid
-    raw_root = study_root / _STUDY_RAW_RELATIVE_PATH
-    article_dir = raw_root / _ARTICLE_SUBDIR
-    supplementary_dir = raw_root / _SUPPLEMENTARY_SUBDIR
-    manifest_path = raw_root / _MANIFEST_RELATIVE_PATH
-
-    article_dir.mkdir(parents=True, exist_ok=True)
-    supplementary_dir.mkdir(parents=True, exist_ok=True)
+    supplementary_dir = workspace.supplementary_dir
+    manifest_path = workspace.download_manifest_path
 
     warnings: list[str] = []
-    xml_path, xml_reused = _ensure_xml(article_dir, resolved.pmcid)
+    _, xml_reused = _ensure_xml(workspace.article_xml_path, resolved.pmcid)
     supplementary_paths, supplementary_reused = _ensure_supplementary_files(
         pmcid=resolved.pmcid,
         supplementary_dir=supplementary_dir,
         warnings=warnings,
     )
-    article_pdf_path, article_pdf_reused = _ensure_article_pdf(
-        article_dir=article_dir,
+    _, article_pdf_reused = _ensure_article_pdf(
+        article_pdf_path=workspace.article_pdf_path,
         supplementary_dir=supplementary_dir,
         pmcid=resolved.pmcid,
         warnings=warnings,
     )
 
-    manifest = {
-        "input_identifier": resolved.input_identifier,
-        "identifier_type": resolved.identifier_type,
-        "normalized_identifier": resolved.normalized_identifier,
-        "pmid": resolved.normalized_identifier if resolved.identifier_type == "PMID" else None,
-        "pmcid": resolved.pmcid,
-        "xml_path": str(xml_path),
-        "article_pdf_path": str(article_pdf_path) if article_pdf_path else None,
-        "supplementary_paths": [str(path) for path in supplementary_paths],
-    }
-    _write_json(manifest_path, manifest)
+    result = _build_result_payload(
+        workspace=workspace,
+        resolved=resolved,
+        warnings=warnings,
+        xml_reused=xml_reused,
+        supplementary_reused=supplementary_reused,
+        article_pdf_reused=article_pdf_reused,
+        supplementary_paths=supplementary_paths,
+    )
+    _write_json(manifest_path, result)
+    return result
 
-    return {
-        "resolved_identifier": {
-            "input_identifier": resolved.input_identifier,
-            "identifier_type": resolved.identifier_type,
-            "normalized_identifier": resolved.normalized_identifier,
-            "pmcid": resolved.pmcid,
-        },
-        "managed_paths": {
-            "studies_root": str(studies_root),
-            "study_raw_relative_path": str(_STUDY_RAW_RELATIVE_PATH),
-            "manifest_relative_path": str(_MANIFEST_RELATIVE_PATH),
-        },
-        "study_root": str(study_root),
-        "raw_root": str(raw_root),
-        "article_dir": str(article_dir),
-        "supplementary_dir": str(supplementary_dir),
-        "manifest_path": str(manifest_path),
-        "xml_path": str(xml_path),
-        "article_pdf_path": str(article_pdf_path) if article_pdf_path else None,
-        "supplementary_paths": [str(path) for path in supplementary_paths],
-        "warnings": warnings,
-        "reused": {
-            "xml": xml_reused,
-            "supplementary": supplementary_reused,
-            "article_pdf": article_pdf_reused,
-        },
-    }
+
+def _emit(payload: dict[str, Any]) -> None:
+    print(json.dumps(payload, indent=2, ensure_ascii=False))
 
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Download article XML/PDF and supplementary files from PMC into "
-            "<studies-root>/<PMCID>/raw."
+            "Download article XML/PDF and supplementary files from PMC into the canonical "
+            "study source workspace under $CBIO_CURATION_ASSISTANT_HOME/studies/<study_id>/source."
         ),
     )
-    parser.add_argument("identifier", help="Numeric PMID or PMCID such as PMC8432745.")
     parser.add_argument(
-        "--studies-root",
+        "--identifier",
         required=True,
-        type=Path,
-        help="Directory containing the managed cBioPortal study workspaces.",
+        help="User-supplied publication identifier value, for example 8432745 or PMC8432745.",
     )
     parser.add_argument(
-        "--output-json",
-        help="Optional file path where the full download result JSON will be written.",
+        "--identifier-type",
+        required=True,
+        choices=["pmid", "pmcid"],
+        help="Interpret --identifier explicitly as a PMID or PMCID.",
+    )
+    parser.add_argument(
+        "--assistant-home",
+        help=(
+            "Absolute path to the cBioPortal AI Curation Assistant installation root. "
+            "Defaults to the repository root that contains this script."
+        ),
     )
     parser.add_argument(
         "--log-level",
@@ -302,21 +421,27 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         result = run_study_download(
             identifier=args.identifier,
-            studies_root=args.studies_root,
+            identifier_type=args.identifier_type,
+            assistant_home=args.assistant_home,
         )
     except PMCRequestError as exc:
-        logger.error("%s", _format_pmc_error(exc))
+        _emit(
+            {
+                "status": "error",
+                "error": _format_pmc_error(exc),
+            }
+        )
         return 1
     except Exception as exc:
-        logger.error("%s", exc)
+        _emit(
+            {
+                "status": "error",
+                "error": f"{type(exc).__name__}: {exc}",
+            }
+        )
         return 1
 
-    rendered = json.dumps(result, indent=2, ensure_ascii=False)
-    if args.output_json:
-        output_json_path = Path(args.output_json).expanduser().resolve()
-        _write_json(output_json_path, result)
-
-    print(rendered)
+    _emit(result)
     return 0
 
 

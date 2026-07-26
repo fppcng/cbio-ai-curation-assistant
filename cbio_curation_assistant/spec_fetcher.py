@@ -31,7 +31,7 @@ from typing import Optional
 
 import requests
 
-from cbioportal_spec import SPECS, FormatSpec
+from cbio_curation_assistant.cbioportal_spec import SPECS, FormatSpec
 
 logger = logging.getLogger(__name__)
 

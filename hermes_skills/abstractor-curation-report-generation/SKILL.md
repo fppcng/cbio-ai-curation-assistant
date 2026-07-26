@@ -13,41 +13,36 @@ Use this skill when the user asks or you need to generate or regenerate a cBioPo
 
 ## Core rules
 - Never invent paper or supplementary paths. Use only files that exist locally.
-- Pass exactly one paper source to the script: `--paper-pdf` or `--paper-xml`.
-- Save report artifacts under `$CBIO_CURATION_ASSISTANT_HOME/studies/<PMCID>/reports/` whenever the inputs belong to a single study, using recognizable default names like `<study_id>_abstractor_report.pdf` and `<study_id>_abstractor_report.json`.
+- Pass the canonical study workspace key to the script with `--study-id`. The script loads the initialized workspace from `study_manifest.json` and resolves the canonical article source and supplementary files from there.
+- Save report artifacts under `$CBIO_CURATION_ASSISTANT_HOME/studies/<study_id>/reports/` whenever the inputs belong to a single study, using recognizable default names like `<study_id>_abstractor_report.pdf` and `<study_id>_abstractor_report.json`.
 - Use LLM-backed metadata extraction when configuration is available; otherwise allow the script to fall back deterministically without LLM.
 - It is acceptable to return or attach the generated PDF to the user when the run succeeds.
 
 ## Procedure
 1. Locate the local paper source and the supplementary files that should be included.
-2. If the user provided only a PMID or PMCID and no local study artifacts exist yet, report that the required local inputs are missing.
-3. Treat `$CBIO_CURATION_ASSISTANT_HOME/studies/<PMCID>/reports/` as the canonical report directory for the study.
+2. If the user provided only a publication identifier and no local study artifacts exist yet, report that the required local inputs are missing.
+3. Treat `$CBIO_CURATION_ASSISTANT_HOME/studies/<study_id>/reports/` as the canonical report directory for the study.
 4. Run the repository report-generation script from the repo root using the project virtual environment:
 cd "$CBIO_CURATION_ASSISTANT_HOME"
 `"$CBIO_CURATION_ASSISTANT_HOME/.venv/bin/python" \`
   `hermes_skills/abstractor-curation-report-generation/scripts/abstractor_report_generator.py \`
-  `--paper-xml <paper_xml_path> \`
-  `--supp <supp_path_1> <supp_path_2>`
-6. When a supplementary input is a directory and recursive discovery is required, also pass `--recursive-supp`.
-7. When the paper source is a PDF, use `--paper-pdf` instead of `--paper-xml`.
-8. If the script cannot infer a unique study root from the paper and supplementary paths, pass `--output-dir /home/cbio26/cbio-ai-curation-assistant/studies/<PMCID>/reports` explicitly.
-9. If you need a fixed PDF filename, pass `--output-pdf` with an absolute path inside the study reports/ directory:
-`--output-pdf "$CBIO_CURATION_ASSISTANT_HOME/studies/<PMCID>/reports/<study_id>_abstractor_report.pdf"`
-10. If you need a fixed JSON filename, pass `--output-json` with an absolute path inside the study reports/ directory:
-`--output-json "$CBIO_CURATION_ASSISTANT_HOME/studies/<PMCID>/reports/<study_id>_abstractor_report.json"`
-11. After the run, verify the generated PDF and JSON paths on disk.
+  `--study-id <study_id>`
+5. The script resolves canonical inputs from `studies/<study_id>/source/` and writes report artifacts under `studies/<study_id>/reports/`.
+6. If `source/article/article.xml` is present it is used as the primary paper source; otherwise the script falls back to `source/article/article.pdf`.
+7. Use `--no-pdf` only when you explicitly want to skip PDF report generation.
+8. After the run, verify the generated PDF and JSON paths on disk.
 
-## What the abstractor_report_generator.py script owns
+## What the script owns
 The script deterministically handles:
-- validation that exactly one paper source was provided
-- supplementary path expansion and filtering of supported file types
-- local paper path resolution
+- canonical workspace loading and validation from `study_manifest.json` using `--study-id`
+- canonical article-source selection between `source/article/article.xml` and `source/article/article.pdf`
+- supplementary-file discovery under `source/supplementary/`
 - LLM config detection from the process environment when provider settings are available
 - fallback to non-LLM metadata handling when no usable LLM config is available or completion fails
 - metadata extraction from the paper source
 - supplementary-file analysis
 - curation summary construction
-- default PDF and JSON path resolution under `studies/<PMCID>/reports/` with recognizable names like `<study_id>_abstractor_report.pdf` and `<study_id>_abstractor_report.json` when a unique study root can be inferred
+- canonical PDF and JSON path resolution under `studies/<study_id>/reports/` with recognizable names like `<study_id>_abstractor_report.pdf` and `<study_id>_abstractor_report.json`
 - PDF generation when PDF output is enabled
 - JSON report rendering and persistence when an output location is available
 
@@ -62,7 +57,7 @@ Do not restate those implementation details in agent reasoning unless they are d
 - If the task was successful and a PDF was generated, it is fine to return or attach the PDF to the user.
 
 ## Important limits
-- This workflow does not fetch files from PMID or PMCID by itself.
-- Do not pass both `--paper-pdf` and `--paper-xml` in the same run.
+- This workflow does not fetch files by itself; it expects the canonical study workspace to exist already.
+- Do not point the script at ad hoc paper or supplementary paths; use the canonical study workspace and `--study-id`.
 - Do not claim success for a PDF or JSON file that is not present on disk.
 - Do not include supplementary files that were not requested or approved by the user.

@@ -4,11 +4,11 @@ This note condenses the mutation-data guidance from `curator-cbioportal-dataset-
 
 ## Workspace and paths
 
-Use `studies/<PMCID>/curated/` as the mutation-curation workspace for the study.
+Use `studies/<study_id>/curated/` as the mutation-curation workspace for the study.
 
 Within that directory:
 - create `minimal_mutations.maf`
-- run Genome Nexus with `--workspace` only
+- run Genome Nexus with `--study-id` only for workspace resolution
 - expect `data_mutations.txt`, `annotations_errors.txt`, and `genome_nexus.log` to be written back into the same directory
 
 ## When this workflow applies

@@ -24,8 +24,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 import pandas as pd
-from cbioportal_spec import FormatSpec
-from spec_fetcher import fetch_spec
+from cbio_curation_assistant.cbioportal_spec import FormatSpec
+from cbio_curation_assistant.spec_fetcher import fetch_spec
 
 CONFIDENCE_THRESHOLD = 40
 MATRIX_PENALTY       = 25
