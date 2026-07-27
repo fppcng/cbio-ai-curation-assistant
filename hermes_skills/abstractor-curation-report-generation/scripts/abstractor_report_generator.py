@@ -14,142 +14,24 @@ import collections
 import json
 import logging
 import os
-import sys
 from pathlib import Path
 from typing import Any, Sequence
 
-_REPO_ROOT_ENV = "CBIO_ASSISTANT_REPO_ROOT"
-
-
-def _get_repo_root() -> Path:
-    raw_repo_root = os.environ.get(_REPO_ROOT_ENV)
-    if raw_repo_root:
-        repo_root = Path(raw_repo_root).expanduser().resolve()
-    else:
-        repo_root = Path(__file__).resolve().parents[3]
-
-    if not repo_root.is_dir():
-        raise RuntimeError(
-            f"Unable to resolve repository root from {_REPO_ROOT_ENV} or script location: {repo_root}"
-        )
-
-    return repo_root
-
-
-_REPO_ROOT = _get_repo_root()
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
-
-from cbio_curation_assistant.cbioportal_curator import _analyse_supplementary_files, _extract_metadata_llm, _extract_pdf_text  # noqa: E402
-from cbio_curation_assistant.cli_shared import extract_xml_metadata_with_llm  # noqa: E402
-from cbio_curation_assistant.config import LLMConfig, PROVIDER_SPECS, get_provider_default_config, get_provider_names  # noqa: E402
-from cbio_curation_assistant.pdf_report import (  # noqa: E402
+from cbio_curation_assistant.cbioportal_curator import _analyse_supplementary_files, _extract_metadata_llm, _extract_pdf_text
+from cbio_curation_assistant.cli_shared import extract_xml_metadata_with_llm
+from cbio_curation_assistant.config import LLMConfig
+from cbio_curation_assistant.hermes_llm import resolve_optional_hermes_llm_config
+from cbio_curation_assistant.pdf_report import (
     build_curation_report_json,
     save_curation_report_pdf,
 )
-from cbio_curation_assistant.pmc_supplement_fetcher import SUPPORTED_SUPPLEMENT_EXTENSIONS  # noqa: E402
-from cbio_curation_assistant.workspace import InvalidStudyIdError, StudyWorkspace, WorkspaceConfigurationError  # noqa: E402
+from cbio_curation_assistant.pmc_supplement_fetcher import SUPPORTED_SUPPLEMENT_EXTENSIONS
+from cbio_curation_assistant.workspace import InvalidStudyIdError, StudyWorkspace, WorkspaceConfigurationError
 
 logger = logging.getLogger(__name__)
 
-_LLM_DISCOVERY_ORDER = ("LiteLLM", "OpenAI", "Anthropic")
 _DEFAULT_REPORT_SUFFIX = "abstractor_report"
-
-
-def _load_llm_env_value(env_name: str | None, default: str = "") -> str:
-    if not env_name:
-        return default
-    return os.environ.get(env_name, "").strip() or default
-
-
-def _build_skill_llm_config(
-    provider: str,
-    *,
-    api_key: str | None = None,
-    model: str | None = None,
-    base_url: str | None = None,
-    api_mode: str | None = None,
-) -> LLMConfig:
-    defaults = get_provider_default_config(
-        provider,
-        value_loader=lambda env_name, default="": _load_llm_env_value(env_name, default),
-    )
-    spec = PROVIDER_SPECS[provider]
-    resolved_api_mode = defaults.api_mode if api_mode is None else (api_mode or "").strip().lower()
-    return LLMConfig(
-        provider=provider,
-        api_key=(defaults.api_key if api_key is None else api_key).strip(),
-        model=(defaults.model if model is None else model).strip() or defaults.model,
-        base_url=(defaults.base_url if base_url is None else base_url).strip(),
-        api_mode=resolved_api_mode or spec.default_api_mode,
-    )
-
-
-def _is_complete_llm_config(config: LLMConfig) -> bool:
-    spec = PROVIDER_SPECS[config.provider]
-    if spec.requires_api_key and not config.api_key:
-        return False
-    if config.provider == "LiteLLM" and not config.base_url:
-        return False
-    return bool(config.model)
-
-
-def _require_complete_llm_config(config: LLMConfig) -> None:
-    spec = PROVIDER_SPECS[config.provider]
-    if config.provider == "LiteLLM" and not config.base_url:
-        raise ValueError(f"Please set {spec.base_url_env} in the Hermes environment or pass --base-url.")
-    if spec.requires_api_key and not config.api_key:
-        raise ValueError(f"Please set {spec.api_key_env} in the Hermes environment or pass --api-key.")
-    if not config.model:
-        raise ValueError(f"Please choose a model for {config.provider}.")
-
-
-def _auto_select_llm_provider() -> str | None:
-    available_providers = set(get_provider_names())
-    for provider in _LLM_DISCOVERY_ORDER:
-        if provider not in available_providers:
-            continue
-        config = _build_skill_llm_config(provider)
-        if _is_complete_llm_config(config):
-            return provider
-    return None
-
-
-def _resolve_skill_llm_config(
-    *,
-    provider: str | None,
-    api_key: str | None,
-    model: str | None,
-    base_url: str | None,
-    api_mode: str | None,
-) -> LLMConfig | None:
-    has_explicit_overrides = any(value is not None for value in (provider, api_key, model, base_url, api_mode))
-    resolved_provider = provider or _auto_select_llm_provider()
-
-    if resolved_provider is None:
-        if has_explicit_overrides:
-            raise ValueError(
-                "No complete LLM configuration was found in the Hermes environment. "
-                "Pass --provider with a complete override."
-            )
-        return None
-
-    config = _build_skill_llm_config(
-        resolved_provider,
-        api_key=api_key,
-        model=model,
-        base_url=base_url,
-        api_mode=api_mode,
-    )
-
-    if has_explicit_overrides:
-        _require_complete_llm_config(config)
-        return config
-
-    if provider is None:
-        logger.info("Auto-selected LLM provider from environment: %s", resolved_provider)
-
-    return config if _is_complete_llm_config(config) else None
+_AGENT_REPORT_SCHEMA_VERSION = 1
 
 
 def _is_supported_supplementary_file(path: Path) -> bool:
@@ -340,7 +222,7 @@ def _extract_pdf_metadata(
         return {}
 
     if llm_config is None:
-        warnings.append("No LLM configuration is available. PDF metadata fields will be blank.")
+        warnings.append("No Hermes LLM configuration is available. PDF metadata fields will be blank.")
         return {}
 
     try:
@@ -450,6 +332,61 @@ def _write_json(path: str | Path, payload: dict[str, Any]) -> str:
     return str(destination)
 
 
+def _resolve_agent_report_path(
+    output_json_path: str | None,
+    output_dir: str | None,
+    study_workspace: StudyWorkspace | None,
+) -> str | None:
+    if output_json_path:
+        report_path = Path(output_json_path).expanduser().resolve()
+        return str(report_path.with_name(f"{report_path.stem}_agent_report.json"))
+    if output_dir:
+        return str((Path(output_dir).expanduser().resolve() / "curation_report_agent.json").resolve())
+    if study_workspace is not None:
+        return str(study_workspace.curation_report_agent_path.resolve())
+    return None
+
+
+def _build_agent_report(
+    *,
+    study_workspace: StudyWorkspace | None,
+    inputs: dict[str, Any],
+    warnings: Sequence[str],
+    resolved_llm_config: LLMConfig | None,
+    pdf_path: str | None,
+    report_json_path: str | None,
+    agent_report_json_path: str | None,
+) -> dict[str, Any]:
+    supplementary_paths = [str(Path(path).expanduser().resolve()) for path in inputs.get("supplementary_paths", [])]
+    return {
+        "schema_version": _AGENT_REPORT_SCHEMA_VERSION,
+        "status": "success",
+        "success": True,
+        "study_id": study_workspace.study_id if study_workspace is not None else None,
+        "paper_source": {
+            "type": inputs.get("paper_source_type"),
+            "path": inputs.get("paper_source_value"),
+        },
+        "supplementary_files": {
+            "count": len(supplementary_paths),
+            "paths": supplementary_paths,
+        },
+        "llm_metadata_extraction": {
+            "enabled": resolved_llm_config is not None,
+            "provider": resolved_llm_config.provider if resolved_llm_config else None,
+            "model": resolved_llm_config.model if resolved_llm_config else None,
+            "api_mode": resolved_llm_config.api_mode if resolved_llm_config else None,
+            "base_url": resolved_llm_config.base_url if resolved_llm_config else None,
+        },
+        "outputs": {
+            "pdf": pdf_path,
+            "curation_report_json": report_json_path,
+            "agent_report_json": agent_report_json_path,
+        },
+        "warnings": list(warnings),
+    }
+
+
 def run_curation_orchestrator(
     *,
     paper_pdf_path: str | None = None,
@@ -457,13 +394,7 @@ def run_curation_orchestrator(
     supplementary_paths: Sequence[str | Path] | None = None,
     study_workspace: StudyWorkspace | None = None,
     llm_config: LLMConfig | None = None,
-    provider: str | None = None,
-    api_key: str | None = None,
-    model: str | None = None,
-    base_url: str | None = None,
-    api_mode: str | None = None,
     recursive_supplementary_search: bool = False,
-    generate_pdf: bool = True,
     output_pdf_path: str | None = None,
     output_dir: str | None = None,
     output_json_path: str | None = None,
@@ -482,13 +413,7 @@ def run_curation_orchestrator(
     if sum(selected_sources) != 1:
         raise ValueError("Provide exactly one of: paper_pdf_path or paper_xml_path.")
 
-    resolved_llm_config = llm_config or _resolve_skill_llm_config(
-        provider=provider,
-        api_key=api_key,
-        model=model,
-        base_url=base_url,
-        api_mode=api_mode,
-    )
+    resolved_llm_config = llm_config or resolve_optional_hermes_llm_config()
 
     warnings: list[str] = []
     meta: dict[str, Any]
@@ -520,7 +445,7 @@ def run_curation_orchestrator(
             warnings,
             logger=logger,
             missing_text_warning="Could not extract text from the XML. Using structured XML metadata only.",
-            missing_llm_warning="No LLM configuration is available. Using structured XML metadata only.",
+            missing_llm_warning="No Hermes LLM configuration is available. Using structured XML metadata only.",
             completion_failure_warning=(
                 "XML metadata completion returned unexpected format. Continuing with structured XML metadata only."
             ),
@@ -542,27 +467,39 @@ def run_curation_orchestrator(
     resolved_output_pdf_path = _resolve_output_pdf_path(output_pdf_path, output_dir, study_workspace, meta, summary)
     resolved_output_json_path = _resolve_output_json_path(
         output_json_path=output_json_path,
-        output_pdf_path=resolved_output_pdf_path if generate_pdf else None,
+        output_pdf_path=resolved_output_pdf_path,
         output_dir=output_dir,
         study_workspace=study_workspace,
         meta=meta,
         summary=summary,
     )
 
-    pdf_path: str | None = None
-    if generate_pdf:
-        pdf_path = save_curation_report_pdf(meta, summary, resolved_output_pdf_path)
+    pdf_path = save_curation_report_pdf(meta, summary, resolved_output_pdf_path)
 
     report = build_curation_report_json(meta, summary)
     report_json_path = _write_json(resolved_output_json_path, report) if resolved_output_json_path else None
+    resolved_agent_report_path = _resolve_agent_report_path(output_json_path, output_dir, study_workspace)
+    agent_report = _build_agent_report(
+        study_workspace=study_workspace,
+        inputs=inputs,
+        warnings=warnings,
+        resolved_llm_config=resolved_llm_config,
+        pdf_path=pdf_path,
+        report_json_path=report_json_path,
+        agent_report_json_path=resolved_agent_report_path,
+    )
+    agent_report_json_path = _write_json(resolved_agent_report_path, agent_report) if resolved_agent_report_path else None
+    agent_report["outputs"]["agent_report_json"] = agent_report_json_path
 
     return {
         "report": report,
+        "agent_report": agent_report,
         "meta": meta,
         "records": records,
         "summary": summary,
         "pdf_path": pdf_path,
         "report_json_path": report_json_path,
+        "agent_report_json_path": agent_report_json_path,
         "study_root": str(study_workspace.root) if study_workspace is not None else None,
         "warnings": warnings,
         "inputs": inputs,
@@ -579,40 +516,16 @@ def run_curation_orchestrator(
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Generate a cBioPortal curation report from the canonical article and supplementary "
-            "files in a study workspace."
+            "Generate a cBioPortal curation report PDF and JSON from the canonical article "
+            "and supplementary files in a study workspace. LLM metadata enrichment is resolved "
+            "from the Hermes environment."
         ),
     )
 
     parser.add_argument(
         "--study-id",
         required=True,
-        help="Canonical study workspace key used to resolve the workspace under $CBIO_CURATION_ASSISTANT_HOME/studies/.",
-    )
-
-    parser.add_argument(
-        "--provider",
-        choices=list(get_provider_names()),
-        help=(
-            "LLM provider. When omitted, the script auto-selects the first complete provider "
-            "from the Hermes environment in this order: LiteLLM, OpenAI, Anthropic."
-        ),
-    )
-    parser.add_argument("--api-key", help="Override the provider API key.")
-    parser.add_argument("--model", help="Override the provider model.")
-    parser.add_argument("--base-url", help="Override the provider base URL.")
-    parser.add_argument("--api-mode", help="Override the provider API mode.")
-
-    parser.add_argument(
-        "--no-pdf",
-        action="store_true",
-        help="Skip PDF report generation.",
-    )
-    parser.add_argument(
-        "--log-level",
-        default="INFO",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        help="Logging verbosity.",
+        help="Canonical study workspace key used to resolve the study workspace.",
     )
 
     return parser
@@ -622,11 +535,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
-    logging.basicConfig(
-        level=getattr(logging, args.log_level.upper(), logging.INFO),
-        format="%(levelname)s %(name)s: %(message)s",
-    )
-
     try:
         study_workspace, paper_pdf_path, paper_xml_path, supplementary_paths = _resolve_study_inputs(args.study_id)
         result = run_curation_orchestrator(
@@ -634,18 +542,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             paper_xml_path=paper_xml_path,
             supplementary_paths=supplementary_paths,
             study_workspace=study_workspace,
-            provider=args.provider,
-            api_key=args.api_key,
-            model=args.model,
-            base_url=args.base_url,
-            api_mode=args.api_mode,
-            generate_pdf=not args.no_pdf,
         )
     except Exception as exc:
         logger.error("%s", exc)
         return 1
 
-    rendered = json.dumps(result["report"], indent=2, ensure_ascii=False)
+    rendered = json.dumps(result["agent_report"], indent=2, ensure_ascii=False)
     print(rendered)
     return 0
 

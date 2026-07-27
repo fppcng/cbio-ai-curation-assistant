@@ -225,6 +225,10 @@ class StudyWorkspace:
         return self.root / "reports"
 
     @property
+    def curation_report_agent_path(self) -> Path:
+        return self.reports_dir / "curation_report_agent.json"
+
+    @property
     def manifest_path(self) -> Path:
         return self.root / MANIFEST_FILENAME
 
@@ -307,6 +311,46 @@ class StudyWorkspace:
             "managed_paths": self.as_manifest_paths(),
         }
 
+    def discovery_payload(self) -> dict[str, Any]:
+        """Return absolute workspace paths for agent-facing discovery."""
+        self.load_manifest()
+        return {
+            "schema_version": 1,
+            "status": "success",
+            "study_id": self.study_id,
+            "workspace": {
+                "root": str(self.root.resolve()),
+                "source": str(self.source_dir.resolve()),
+                "article": str(self.article_dir.resolve()),
+                "supplementary": str(self.supplementary_dir.resolve()),
+                "curated": str(self.curated_dir.resolve()),
+                "reports": str(self.reports_dir.resolve()),
+            },
+            "manifests": {
+                "study": str(self.manifest_path.resolve()),
+                "download": str(self.download_manifest_path.resolve()),
+            },
+            "artifacts": {
+                "article_xml": str(self.article_xml_path.resolve()),
+                "article_pdf": str(self.article_pdf_path.resolve()),
+                "curation_report_agent": str(self.curation_report_agent_path.resolve()),
+            },
+            "availability": {
+                "download_manifest": self.download_manifest_path.is_file(),
+                "article_xml": self.article_xml_path.is_file(),
+                "article_pdf": self.article_pdf_path.is_file(),
+                "curation_report_agent": self.curation_report_agent_path.is_file(),
+            },
+        }
+
+    def initialize(self) -> Path:
+        """Create directories and preserve an existing valid manifest."""
+        self.create()
+        if self.manifest_path.exists():
+            self.load_manifest()
+            return self.manifest_path.resolve()
+        return self.write_manifest()
+
     def write_manifest(self) -> Path:
         """Persist the canonical study manifest on disk."""
         self.create()
@@ -364,6 +408,18 @@ class StudyWorkspace:
                 f"Workspace manifest must map 'study_root' to '.': {manifest_path}"
             )
 
+        canonical_paths = self.as_manifest_paths()
+        noncanonical_paths = {
+            key: managed_paths.get(key)
+            for key, canonical_value in canonical_paths.items()
+            if managed_paths.get(key) != canonical_value
+        }
+        if noncanonical_paths:
+            raise WorkspaceConfigurationError(
+                f"Workspace manifest contains noncanonical managed paths {sorted(noncanonical_paths)}: "
+                f"{manifest_path}"
+            )
+
         for key, value in managed_paths.items():
             if not isinstance(value, str) or not value.strip():
                 raise WorkspaceConfigurationError(
@@ -390,7 +446,7 @@ def get_study_workspace(
     )
 
     if create:
-        workspace.write_manifest()
+        workspace.initialize()
 
     if require_manifest:
         workspace.load_manifest()

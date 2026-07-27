@@ -5,103 +5,10 @@ from pathlib import Path
 from typing import Any
 
 from cbio_curation_assistant.cbioportal_curator import SYSTEM_PROMPT_CURATOR
-from cbio_curation_assistant.config import LLMConfig, PROVIDER_SPECS, get_provider_default_config, get_provider_names
+from cbio_curation_assistant.config import LLMConfig
 from cbio_curation_assistant.llm_client import call_llm_with_retry, parse_llm_json
 from cbio_curation_assistant.metadata_merge import merge_missing_metadata_fields
 from cbio_curation_assistant.xml_metadata import extract_metadata_from_xml, extract_xml_llm_text
-
-
-def is_provider_configured(config: LLMConfig) -> bool:
-    spec = PROVIDER_SPECS[config.provider]
-    if spec.requires_api_key and not config.api_key:
-        return False
-    if config.provider == "LiteLLM" and not config.base_url:
-        return False
-    return bool(config.model)
-
-
-def default_configured_provider() -> str | None:
-    providers = list(get_provider_names())
-    for provider in ("OpenAI", "Anthropic", "LiteLLM"):
-        if provider in providers and is_provider_configured(get_provider_default_config(provider)):
-            return provider
-    for provider in providers:
-        if is_provider_configured(get_provider_default_config(provider)):
-            return provider
-    return None
-
-
-def require_llm_config(config: LLMConfig) -> None:
-    spec = PROVIDER_SPECS[config.provider]
-    if config.provider == "LiteLLM" and not config.base_url:
-        raise ValueError(f"Please set {spec.base_url_env} in .env or the process environment.")
-    if spec.requires_api_key and not config.api_key:
-        raise ValueError(f"Please add your {config.provider} API key or set {spec.api_key_env}.")
-    if not config.model:
-        raise ValueError(f"Please choose a model for {config.provider}.")
-
-
-def _build_llm_config(
-    resolved_provider: str,
-    api_key: str | None,
-    model: str | None,
-    base_url: str | None,
-    api_mode: str | None,
-) -> LLMConfig:
-    defaults = get_provider_default_config(resolved_provider)
-    spec = PROVIDER_SPECS[resolved_provider]
-    resolved_api_mode = defaults.api_mode if api_mode is None else (api_mode or "").strip().lower()
-    return LLMConfig(
-        provider=resolved_provider,
-        api_key=(defaults.api_key if api_key is None else api_key).strip(),
-        model=(defaults.model if model is None else model).strip(),
-        base_url=(defaults.base_url if base_url is None else base_url).strip(),
-        api_mode=resolved_api_mode or spec.default_api_mode,
-    )
-
-
-def build_required_llm_config(
-    provider: str | None,
-    api_key: str | None,
-    model: str | None,
-    base_url: str | None,
-    api_mode: str | None,
-    *,
-    fallback_provider: str = "OpenAI",
-) -> LLMConfig:
-    resolved_provider = provider or default_configured_provider() or fallback_provider
-    config = _build_llm_config(
-        resolved_provider=resolved_provider,
-        api_key=api_key,
-        model=model,
-        base_url=base_url,
-        api_mode=api_mode,
-    )
-    require_llm_config(config)
-    return config
-
-
-def build_optional_llm_config(
-    provider: str | None,
-    api_key: str | None,
-    model: str | None,
-    base_url: str | None,
-    api_mode: str | None,
-) -> LLMConfig | None:
-    resolved_provider = provider or default_configured_provider()
-    if not resolved_provider:
-        return None
-
-    config = _build_llm_config(
-        resolved_provider=resolved_provider,
-        api_key=api_key,
-        model=model,
-        base_url=base_url,
-        api_mode=api_mode,
-    )
-    if any(value is not None for value in (provider, api_key, model, base_url, api_mode)):
-        require_llm_config(config)
-    return config if is_provider_configured(config) else None
 
 
 def extract_xml_metadata_with_llm(
@@ -149,10 +56,5 @@ def extract_xml_metadata_with_llm(
 
 
 __all__ = [
-    "build_optional_llm_config",
-    "build_required_llm_config",
-    "default_configured_provider",
     "extract_xml_metadata_with_llm",
-    "is_provider_configured",
-    "require_llm_config",
 ]

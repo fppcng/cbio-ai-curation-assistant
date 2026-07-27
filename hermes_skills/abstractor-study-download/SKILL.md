@@ -1,6 +1,6 @@
 ---
 name: abstractor-study-download
-description: Use this skill when asked to download or reuse a study article XML/PDF and supplementary files from PMC using a PMID or PMCID, storing them under the local cbio-ai-curation-assistant studies directory without redownloading files that already exist.
+description: Use this skill when asked to download or reuse local study source artifacts from PMC using a PMID or PMCID, without redownloading files that already exist.
 required_environment_variables:
   - name: CBIO_CURATION_ASSISTANT_HOME
     prompt: Absolute path to the cBioPortal AI Curation Assistant installation directory
@@ -12,49 +12,52 @@ required_environment_variables:
 Use this skill when the user asks to download study artifacts for a paper identified by PMID or PMCID.
 
 ## Core rules
-- Never redownload study assets that already exist locally unless the user explicitly asks to refresh or overwrite them.
-- Treat the resolved study workspace key as canonical for the whole run. For PMC downloads this is the resolved PMCID when resolution succeeds.
-- The storage root is `$CBIO_CURATION_ASSISTANT_HOME/studies/<study_id>/source/`.
-- Treat the returned `study_id` as the only stable handoff to downstream steps. Use the script JSON payload as the source of truth for paths, status, warnings, and reuse details.
+- Treat the returned `study_id` as the only stable handoff to downstream steps.
+- Use the download report JSON printed by the script as the source of truth for status, resolved identifiers, artifacts, warnings, and reuse details.
+- After a successful or partial download, use `cbio-curation workspace describe --study-id <study_id>` when you need canonical workspace paths.
+- Do not infer workspace paths from repository layout or construct them manually in agent reasoning.
 
 ## Procedure
-1. Run the repository download script from the repo root using the project virtual environment:
+1. Run the package CLI through the project selected by `CBIO_CURATION_ASSISTANT_HOME`:
 ```bash
-cd "$CBIO_CURATION_ASSISTANT_HOME"
-"$CBIO_CURATION_ASSISTANT_HOME/.venv/bin/python" \
-  "hermes_skills/abstractor-study-download/scripts/abstractor_study_download.py" \
+uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation study-download \
   --identifier "<identifier_value>" \
-  --identifier-type "<pmid|pmcid>" \
-  --assistant-home "$CBIO_CURATION_ASSISTANT_HOME"
+  --identifier-type "<pmid|pmcid>"
 ```
-2. Parse the JSON payload printed by the script and treat it as authoritative.
-3. If the script returns `status: error`, surface the error message and only fall back to manual debugging if the error itself requires it.
-4. If the script returns `status: partial_success`, surface the warnings explicitly instead of claiming a full download.
+2. Parse the JSON printed by `study-download`; it is the deterministic download report.
+3. If the report has `status: error` or `success: false`, surface the error message and stop unless the user asks for debugging.
+4. If the report has `status: partial_success`, surface the warnings explicitly instead of claiming a full download.
+5. If you need canonical workspace paths for follow-up inspection, run discovery using the returned `study_id`:
+```bash
+uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation workspace describe \
+  --study-id <study_id>
+```
+6. Use the discovery JSON only for paths; use the download report for what was downloaded, reused, missing, or warned.
 
 ## What the script owns
 The script deterministically handles:
-- PMID/PMCID normalization
-- assistant-home resolution and canonical storage-root selection
-- study directory layout
-- reuse of existing XML/PDF/supplementary artifacts when present locally
+- PMID/PMCID normalization and PMID-to-PMCID resolution
+- canonical storage-root resolution from `CBIO_CURATION_ASSISTANT_HOME`
+- workspace initialization through the shared workspace module
+- reuse of existing source artifacts when present locally
 - XML download
 - supplementary download
 - article PDF attempt when available
-- workspace creation and `study_manifest.json` generation
-- download manifest generation under `source/download_manifest.json`
-- structured result payload with `status`, resolved identifiers, workspace paths, artifact presence, warnings, and reuse flags
+- deterministic download report JSON generation and persistence
+- printing the deterministic download report JSON to stdout
 - structured error payloads for deterministic agent recovery
 
 Do not restate those implementation details in agent reasoning unless they are directly relevant to a failure or debugging step.
 
 ## Reporting requirements
-- Report the resolved PMID/PMCID mapping when useful, especially for numeric-only input.
-- Report the canonical study path and source-artifacts path from the script payload.
-- Report the actual artifacts present according to the script payload:
-  - XML path
-  - article PDF path if present, otherwise say it was unavailable
-  - supplementary files actually present
-- If the script reports warnings or a partial download, surface that explicitly instead of claiming a full download.
+Base the user-facing summary on the deterministic download report printed by the script:
+- `resolved_identifier` for the input identifier, normalized identifier, PMID, and PMCID.
+- `study_id` for the stable downstream handoff.
+- `status` and `success` for whether the run succeeded, reused existing files, or partially succeeded.
+- `artifact_details.xml`, `artifact_details.article_pdf`, and `artifact_details.supplementary` for artifact presence, absolute paths, counts, and reuse flags.
+- `reused` for whether XML, supplementary files, and article PDF were reused.
+- `warnings` for any caveats; if empty, say no warnings were reported.
+- Workspace paths only from `workspace describe`, when path reporting is necessary.
 
 ## Important limits
 - Do not claim success for files that are not present on disk.

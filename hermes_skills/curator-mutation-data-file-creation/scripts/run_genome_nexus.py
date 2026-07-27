@@ -23,20 +23,10 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 from typing import Any, Iterable
 
-
-def _get_repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
-
-
-_REPO_ROOT = _get_repo_root()
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
-
-
+import _repo_bootstrap  # noqa: F401
 from cbio_curation_assistant.workspace import StudyWorkspace
 
 

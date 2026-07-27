@@ -2,20 +2,14 @@
 config.py
 ---------
 Central configuration for cBioAbstractor.
-All tunable constants live here, including explicit LLM provider settings.
+All tunable constants live here, including LLM provider settings read from the
+current process environment.
 """
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, replace
-from pathlib import Path
+from dataclasses import dataclass
 from typing import Callable
-
-from dotenv import load_dotenv
-
-_HERE = Path(__file__).resolve().parent
-_REPO_ROOT = _HERE.parent
-load_dotenv(_REPO_ROOT / ".env", override=False)
 
 ProviderName = str
 ValueLoader = Callable[[str, str], str]
@@ -133,13 +127,6 @@ PROVIDER_SPECS: dict[ProviderName, ProviderSpec] = {
     ),
 }
 
-LEGACY_PROVIDER_PREFIXES = {
-    "anthropic": "Anthropic",
-    "openai": "OpenAI",
-    "litellm": "LiteLLM",
-}
-
-
 def get_provider_names() -> tuple[ProviderName, ...]:
     return PROVIDER_ORDER
 
@@ -168,53 +155,4 @@ def get_provider_default_config(
         model=model or spec.default_model,
         base_url=base_url,
         api_mode=_normalise_api_mode(api_mode, spec.default_api_mode),
-    )
-
-
-def build_llm_config(
-    provider: ProviderName,
-    *,
-    api_key: str | None = None,
-    model: str | None = None,
-    base_url: str | None = None,
-    api_mode: str | None = None,
-) -> LLMConfig:
-    default = get_provider_default_config(provider)
-    return LLMConfig(
-        provider=provider,
-        api_key=(default.api_key if api_key is None else api_key).strip(),
-        model=(default.model if model is None else model).strip() or default.model,
-        base_url=(default.base_url if base_url is None else base_url).strip(),
-        api_mode=_normalise_api_mode(
-            default.api_mode if api_mode is None else api_mode,
-            PROVIDER_SPECS[provider].default_api_mode,
-        ),
-    )
-
-
-def with_model(config: LLMConfig, model: str) -> LLMConfig:
-    return replace(config, model=model.strip() or config.model)
-
-
-def build_llm_config_from_legacy_model(
-    llm_model: str,
-    *,
-    api_key: str | None = None,
-    base_url: str | None = None,
-    api_mode: str | None = None,
-) -> LLMConfig:
-    provider = "OpenAI"
-    model = (llm_model or "").strip()
-    if "/" in model:
-        prefix, resolved_model = model.split("/", 1)
-        mapped_provider = LEGACY_PROVIDER_PREFIXES.get(prefix.strip().lower())
-        if mapped_provider:
-            provider = mapped_provider
-            model = resolved_model.strip()
-    return build_llm_config(
-        provider,
-        api_key=api_key,
-        model=model or None,
-        base_url=base_url,
-        api_mode=api_mode,
     )

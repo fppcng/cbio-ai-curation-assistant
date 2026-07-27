@@ -11,33 +11,28 @@ required_environment_variables:
 ## When to use
 Use this skill whenever source disease labels need to be mapped to OncoTree values for cBioPortal study files.
 
-## Tool path
-Use the local OncoTree search script:
+## Tool command
+Run the OncoTree search through the package CLI and the project selected by `CBIO_CURATION_ASSISTANT_HOME`:
 ```bash
-$CBIO_CURATION_ASSISTANT_HOME/hermes_skills/curator-oncotree-consultation/scripts/search_oncotree_code.py
-```
-
-Run it with the project virtual environment:
-```bash
-"$CBIO_CURATION_ASSISTANT_HOME/.venv/bin/python" \
-  "$CBIO_CURATION_ASSISTANT_HOME/hermes_skills/curator-oncotree-consultation/scripts/search_oncotree_code.py" \
+uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation oncotree-search \
   -q '<disease or subtype text>' \
   --json
 ```
 
 Example:
 ```bash
-"$CBIO_CURATION_ASSISTANT_HOME/.venv/bin/python" \
-  "$CBIO_CURATION_ASSISTANT_HOME/hermes_skills/curator-oncotree-consultation/scripts/search_oncotree_code.py" \
+uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation oncotree-search \
   -q 'combined hepatocellular and intrahepatic cholangiocarcinoma' \
   --json
 ```
 
-If you need to inspect a clinical sample file for missing OncoTree fields and suggested mappings:
+If you need to inspect a study clinical sample file, first run workspace discovery and derive the file path from `workspace.curated`:
 ```bash
-"$CBIO_CURATION_ASSISTANT_HOME/.venv/bin/python" \
-  "$CBIO_CURATION_ASSISTANT_HOME/hermes_skills/curator-oncotree-consultation/scripts/search_oncotree_code.py" \
-  --clinical-file "$CBIO_CURATION_ASSISTANT_HOME/studies/<study_id>/curated/data_clinical_sample.txt" \
+uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation workspace describe \
+  --study-id <study_id>
+
+uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation oncotree-search \
+  --clinical-file "<workspace.curated>/data_clinical_sample.txt" \
   --json
 ```
 

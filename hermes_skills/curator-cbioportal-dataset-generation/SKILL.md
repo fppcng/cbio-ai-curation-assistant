@@ -6,15 +6,18 @@ required_environment_variables:
     prompt: Absolute path to the cBioPortal AI Curation Assistant installation directory
 ---
 
+# When to use
+Use when the user asks for a complete cBioPortal dataset starting from a study id.
+
 # cBioPortal Dataset Generation
 - This is an orchestration skill. It coordinates the acquisition, extraction, generation, and validation steps required to produce a cBioPortal study dataset.
 
 ## Required references and delegated skills
-- Read the documentation under ${HERMES_SKILL_DIR}/references before starting the curation workflow.
-- Use cBioPortal_Data_Curation_SOP and cBioPortal_File_Formats as shared context for the overall study structure, naming conventions, allowed values, formatting requirements, validation rules, and data-transformation constraints.
+- Read the documentation under `${HERMES_SKILL_DIR}/references` before starting the curation workflow.
+- Use `cBioPortal_Data_Curation_SOP` and `cBioPortal_File_Formats` as shared context for the overall study structure, naming conventions, allowed values, formatting requirements, validation rules, and data-transformation constraints.
 - Treat these references as cross-cutting guidance for the complete dataset.
 - Follow the delegated skills for detailed, file-specific generation instructions. Each delegated skill is responsible for the interpretation, mapping, transformation, and validation rules associated with the file types it generates.
-- For cBioPortal file types that do not have a delegated skill, follow cBioPortal_Data_Curation_SOP and cBioPortal_File_Formats directly.
+- For cBioPortal file types that do not have a delegated skill, follow `cBioPortal_Data_Curation_SOP` and `cBioPortal_File_Formats` directly.
 - Do not duplicate, replace, or override file-specific instructions from delegated skills unless they conflict with an explicit cBioPortal requirement documented in the references. Report any such conflict instead of resolving it silently.
 
 ## Main rules
@@ -27,27 +30,33 @@ required_environment_variables:
 - Preserve assumptions, warnings, inferred decisions, validation errors, and unresolved issues throughout the workflow so they can be reported clearly to the user at the end.
 
 ## Workflow
-1. Read the documentation under `${HERMES_SKILL_DIR}/references`.
-2. Ensure that the study source artifacts are available.
-  - Check for source data under: `<CBIO_CURATION_ASSISTANT_HOME>/studies/<study_id>/source/`
-  - If the required publication or supplementary files are missing, use the `abstractor-study-download` skill.
-3. Ensure that the abstractor report is available.
-  - Check for: `<CBIO_CURATION_ASSISTANT_HOME>/studies/<study_id>/reports/<study_id>_abstractor_report.json`
-  - If it is missing, use the `abstractor-curation-report-generation` skill.
-4. Generate the clinical files of the study using the `curator-clinical-files-creation` skill.
-5. Generate the mutation files of the study using the `curator-mutation-data-file-creation` skill.
-6. Generate the structural variant file of the study using the `curator-structural-variant-files-creation` skill.
-7. Generate any additional cBioPortal files supported by the available evidence.
+1. Run workspace discovery for the requested study and parse the JSON response:
+```bash
+uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation workspace describe \
+  --study-id <study_id>
+```
+2. Use only the absolute paths returned by discovery. Do not infer paths from repository layout.
+3. Read the documentation under `${HERMES_SKILL_DIR}/references` for general understanding of the task.
+4. Ensure study source artifacts are available.
+  - If source artifacts are missing, use the `abstractor-study-download` skill, then rerun workspace discovery.
+5. Ensure the abstractor agent report is available.
+  - If it is missing, use the `abstractor-curation-report-generation` skill, then rerun workspace discovery.
+6. Generate clinical files using the `curator-clinical-files-creation` skill.
+7. Generate mutation files using the `curator-mutation-data-file-creation` skill.
+8. Generate structural variant files using the `curator-structural-variant-files-creation` skill.
+9. Generate any additional cBioPortal files supported by the available evidence.
   - Use delegated skills when they exist for the file type.
-  - Otherwise follow cBioPortal_Data_Curation_SOP and cBioPortal_File_Formats directly.
-8. Save all generated cBioPortal data and metadata files under: `<CBIO_CURATION_ASSISTANT_HOME>/studies/<study_id>/curated/`.
-9. Validate the generated dataset.
-  - Run the cBioPortal validator against: `<CBIO_CURATION_ASSISTANT_HOME>/studies/<study_id>/curated/`
-  - Write validator artifacts under: `<CBIO_CURATION_ASSISTANT_HOME>/studies/<study_id>/validation/`
+  - Otherwise follow `cBioPortal_Data_Curation_SOP` and `cBioPortal_File_Formats` directly.
+10. Save all generated cBioPortal data and metadata files under `workspace.curated`.
+11. Validate the generated dataset through the package CLI and the project selected by `CBIO_CURATION_ASSISTANT_HOME`:
+```bash
+uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation validate-study \
+  --study-id "<study_id>"
+```
   - Interpret validator results carefully: a warning-only run may return a non-zero exit code, so use the validator summary text as well as the exit status.
   - Do not claim successful validation unless the validator output has been reviewed.
   - If the validator cannot be executed, report the blocker explicitly.
-10. Report the final outcome to the user.
+12. Report the final outcome to the user.
   - List the generated files.
   - List omitted or unsupported files.
   - List assumptions, warnings, and unresolved issues.
@@ -56,19 +65,15 @@ required_environment_variables:
   - State clearly whether the study is complete, partial, or invalid.
 
 ## How to run the cBioPortal validator
-From the `<CBIO_CURATION_ASSISTANT_HOME>`, validate the generated study with:
+Run the validator through the package CLI and the project selected by `CBIO_CURATION_ASSISTANT_HOME`:
 ```bash
-./.venv/bin/python cbioportal_core_validator/scripts/importer/validateData.py \
-  -s studies/<study_id>/curated/ \
-  -html studies/<study_id>/validation/validator_report.html \
-  -json studies/<study_id>/validation/validator_report.json \
-  -n \
-  -v
+uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation validate-study \
+  --study-id "<study_id>"
 ```
 If the validator environment is missing dependencies, report the missing dependency or environment issue to the user instead of claiming validation succeeded.
 Interpret validator results carefully: a warning-only run may return a non-zero exit code, so use the validator summary text as well as the exit status before deciding whether validation failed (look at `references/validator-and-clinical-pitfalls.md`)
 
 ## Output expectations
 - The workflow should produce:
-  - A cBioPortal dataset under: `<CBIO_CURATION_ASSISTANT_HOME>/studies/<study_id>/curated/`
-  - Validator artifacts under: `<CBIO_CURATION_ASSISTANT_HOME>/studies/<study_id>/validation/`
+  - a cBioPortal dataset under `workspace.curated`
+  - validator artifacts reported by the `validate-study` command

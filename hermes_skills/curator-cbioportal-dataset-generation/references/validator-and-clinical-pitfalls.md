@@ -2,15 +2,11 @@
 
 ## Validator environment
 
-Run the validator from the repo root with the repo venv:
+Run the validator through the stable package CLI and the project selected by `CBIO_CURATION_ASSISTANT_HOME`:
 
 ```bash
-./.venv/bin/python cbioportal_core_validator/scripts/importer/validateData.py \
-  -s studies/<study_id>/curated/ \
-  -html studies/<study_id>/validation/validator_report.html \
-  -json studies/<study_id>/validation/validator_report.json \
-  -n \
-  -v
+uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation validate-study \
+  --study-id "<study_id>"
 ```
 
 If the validator is present but missing its pinned Python dependencies, install them into the same venv first:

@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cbio-ai-curation-assistant"
+version = "0.1.0"
+description = "Python helpers for cBioPortal AI-assisted study curation workflows."
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=0.40.0",
+    "litellm>=1.40.0",
+    "openai>=1.0.0",
+    "openpyxl>=3.1.0",
+    "pandas>=2.0.0",
+    "pdfplumber>=0.10.0",
+    "pypdf",
+    "PyPDF2>=3.0.0",
+    "python-docx>=1.1.0",
+    "reportlab>=4.0.0",
+    "requests>=2.31.0",
+    "xlrd>=2.0.1",
+]
+
+[project.scripts]
+cbio-curation = "cbio_curation_assistant.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["cbio_curation_assistant*"]
+exclude = [
+    "cbioportal_core_validator*",
+    "hermes_skills*",
+    "studies*",
+    "tests*",
+]

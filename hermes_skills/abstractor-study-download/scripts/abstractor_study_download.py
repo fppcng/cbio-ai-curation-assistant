@@ -6,21 +6,9 @@ import logging
 import os
 import re
 import shutil
-import sys
 import tempfile
 from pathlib import Path
 from typing import Any, Sequence
-
-
-
-def _get_repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
-
-
-_REPO_ROOT = _get_repo_root()
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
-
 
 from cbio_curation_assistant.pmc_supplement_fetcher import (
     PMCRequestError,
@@ -48,7 +36,7 @@ def _resolve_study_workspace(
     *,
     assistant_home: str | Path | None = None,
 ) -> StudyWorkspace:
-    resolved_assistant_home = resolve_assistant_home(assistant_home or _REPO_ROOT)
+    resolved_assistant_home = resolve_assistant_home(assistant_home)
     return StudyWorkspace.from_study_id(
         study_id,
         assistant_home=resolved_assistant_home,
@@ -283,8 +271,10 @@ def _build_result_payload(
     ]
 
     return {
+        "schema_version": DOWNLOAD_RESULT_VERSION,
         "manifest_version": DOWNLOAD_RESULT_VERSION,
         "status": status,
+        "success": True,
         "study_id": workspace.study_id,
         "study_manifest": workspace.relative_to_root(workspace.manifest_path),
         "download_manifest": workspace.relative_to_root(workspace.download_manifest_path),
@@ -339,7 +329,7 @@ def run_study_download(
         resolved.pmcid,
         assistant_home=assistant_home,
     )
-    workspace.write_manifest()
+    workspace.initialize()
 
     supplementary_dir = workspace.supplementary_dir
     manifest_path = workspace.download_manifest_path
@@ -379,7 +369,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
             "Download article XML/PDF and supplementary files from PMC into the canonical "
-            "study source workspace under $CBIO_CURATION_ASSISTANT_HOME/studies/<study_id>/source."
+            "study source workspace resolved from $CBIO_CURATION_ASSISTANT_HOME."
         ),
     )
     parser.add_argument(
@@ -392,13 +382,6 @@ def _build_parser() -> argparse.ArgumentParser:
         required=True,
         choices=["pmid", "pmcid"],
         help="Interpret --identifier explicitly as a PMID or PMCID.",
-    )
-    parser.add_argument(
-        "--assistant-home",
-        help=(
-            "Absolute path to the cBioPortal AI Curation Assistant installation root. "
-            "Defaults to the repository root that contains this script."
-        ),
     )
     parser.add_argument(
         "--log-level",
@@ -422,12 +405,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = run_study_download(
             identifier=args.identifier,
             identifier_type=args.identifier_type,
-            assistant_home=args.assistant_home,
         )
     except PMCRequestError as exc:
         _emit(
             {
+                "schema_version": DOWNLOAD_RESULT_VERSION,
                 "status": "error",
+                "success": False,
                 "error": _format_pmc_error(exc),
             }
         )
@@ -435,7 +419,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     except Exception as exc:
         _emit(
             {
+                "schema_version": DOWNLOAD_RESULT_VERSION,
                 "status": "error",
+                "success": False,
                 "error": f"{type(exc).__name__}: {exc}",
             }
         )

@@ -6,7 +6,7 @@ import time
 import re
 from typing import Any
 
-from cbio_curation_assistant.config import LITELLM_REASONING_EFFORT, LLMConfig, build_llm_config
+from cbio_curation_assistant.config import LITELLM_REASONING_EFFORT, LLMConfig
 
 logger = logging.getLogger(__name__)
 
@@ -192,28 +192,6 @@ def call_litellm_chat_with_retry(
     raise last_error or RuntimeError("LiteLLM API call failed after retries.")
 
 
-def _resolve_llm_config(
-    *,
-    config: LLMConfig | None = None,
-    provider: str | None = None,
-    api_key: str | None = None,
-    model: str | None = None,
-    base_url: str | None = None,
-    api_mode: str | None = None,
-) -> LLMConfig:
-    if config is not None:
-        return config
-    if not provider:
-        raise ValueError("provider or config is required")
-    return build_llm_config(
-        provider,
-        api_key=api_key,
-        model=model,
-        base_url=base_url,
-        api_mode=api_mode,
-    )
-
-
 def _build_openai_client(config: LLMConfig):
     from openai import OpenAI
 
@@ -253,24 +231,12 @@ def _should_retry_litellm_as_responses(config: LLMConfig, exc: Exception) -> boo
 
 def call_llm_with_retry(
     *,
-    config: LLMConfig | None = None,
-    provider: str | None = None,
-    api_key: str | None = None,
-    model: str | None = None,
+    config: LLMConfig,
     system: str,
     user_content: str,
     max_tokens: int = 2000,
-    base_url: str | None = None,
-    api_mode: str | None = None,
 ) -> str:
-    resolved = _resolve_llm_config(
-        config=config,
-        provider=provider,
-        api_key=api_key,
-        model=model,
-        base_url=base_url,
-        api_mode=api_mode,
-    )
+    resolved = config
 
     if resolved.provider == "Anthropic":
         import anthropic
