@@ -24,15 +24,15 @@ Use this skill when the user asks or you need to generate or regenerate a cBioPo
 uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation workspace describe \
   --study-id <study_id>
 ```
-2. Parse the workspace JSON and use only returned absolute paths when checking local artifacts.
+2. Parse the workspace JSON envelope and use only absolute paths returned under `result` when checking local artifacts.
 3. If workspace discovery fails, stop and report the diagnostic instead of guessing where files should be.
 4. Run the report generator through the package CLI:
 ```bash
 uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation curation-report \
   --study-id <study_id>
 ```
-5. Parse the JSON printed by `curation-report`; it is the deterministic agent report.
-6. Verify any output files you mention using the paths in `outputs`.
+5. Parse the JSON envelope printed by `curation-report`; it is the deterministic agent report.
+6. Verify any output files you mention using the paths in `result.outputs`.
 7. Report the run to the user using the agent report fields.
 
 ## What the script owns
@@ -53,15 +53,15 @@ Do not restate those implementation details in agent reasoning unless they are d
 
 ## Reporting requirements
 Base the user-facing summary on the deterministic agent report printed by the script:
-- `paper_source.type` and `paper_source.path` for the paper source used.
-- `supplementary_files.count` and `supplementary_files.paths` for supplementary files actually analysed.
-- `llm_metadata_extraction.enabled`, plus provider/model when present, for LLM metadata extraction.
-- `outputs.pdf`, `outputs.curation_report_json`, and `outputs.agent_report_json` for generated artifacts.
+- `result.paper_source.type` and `result.paper_source.path` for the paper source used.
+- `result.supplementary_files.count` and `result.supplementary_files.paths` for supplementary files actually analysed.
+- `result.llm_metadata_extraction.enabled`, plus provider/model when present, for LLM metadata extraction.
+- `result.outputs.pdf`, `result.outputs.curation_report_json`, and `result.outputs.agent_report_json` for generated artifacts.
 - `warnings` for any caveats; if empty, say no warnings were reported.
-- `status` and `success` for whether the run succeeded.
+- `status` for whether the run succeeded; use `error.message` when it failed.
 
 ## Important limits
 - This workflow does not fetch files by itself; it expects the canonical study workspace to exist already.
 - Do not point the script at ad hoc paper or supplementary paths; use the canonical study workspace and `--study-id`.
 - Do not claim success for a PDF or JSON file that is not present on disk.
-- Do not include supplementary files that were not requested or approved by the user.
+- All supported files present under the canonical study supplementary directory are within the approved report scope and are analysed recursively.

@@ -100,8 +100,9 @@ class OncotreeLookupTest(unittest.TestCase):
 
         payload = json.loads(stdout.getvalue())
         self.assertEqual(code, 0)
-        self.assertEqual(len(payload["query_results"]), 1)
-        self.assertEqual(payload["query_results"][0]["oncotree_code"], "LUAD")
+        self.assertEqual(payload["status"], "success")
+        self.assertEqual(len(payload["result"]["query_results"]), 1)
+        self.assertEqual(payload["result"]["query_results"][0]["oncotree_code"], "LUAD")
 
 
 class ClinicalDictionaryLookupTest(unittest.TestCase):
@@ -195,8 +196,9 @@ class ClinicalDictionaryLookupTest(unittest.TestCase):
 
         payload = json.loads(stdout.getvalue())
         self.assertEqual(code, 0)
-        self.assertEqual(payload[0]["column_header"], "AGE")
-        self.assertEqual(payload[0]["score"], 1.0)
+        self.assertEqual(payload["status"], "success")
+        self.assertEqual(payload["result"][0]["column_header"], "AGE")
+        self.assertEqual(payload["result"][0]["score"], 1.0)
 
 
 if __name__ == "__main__":

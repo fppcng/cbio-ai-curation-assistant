@@ -50,8 +50,8 @@ class AbstractorReportRegressionTest(unittest.TestCase):
             self.assertTrue(output_pdf_path.is_file())
             self.assertTrue(agent_report_path.is_file())
             self.assertEqual(result["agent_report"]["schema_version"], 1)
-            self.assertTrue(result["agent_report"]["success"])
-            self.assertEqual(result["agent_report"]["paper_source"]["type"], "xml")
+            self.assertEqual(result["agent_report"]["status"], "success")
+            self.assertEqual(result["agent_report"]["result"]["paper_source"]["type"], "xml")
             self.assertEqual(result["agent_report"]["warnings"], [NO_LLM_WARNING])
 
         gold_report = load_gold_report()

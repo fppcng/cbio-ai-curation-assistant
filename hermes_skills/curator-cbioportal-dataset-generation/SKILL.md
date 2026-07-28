@@ -35,7 +35,7 @@ Use when the user asks for a complete cBioPortal dataset starting from a study i
 uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation workspace describe \
   --study-id <study_id>
 ```
-2. Use only the absolute paths returned by discovery. Do not infer paths from repository layout.
+2. Use only the absolute paths returned under discovery `result`. Do not infer paths from repository layout.
 3. Read the documentation under `${HERMES_SKILL_DIR}/references` for general understanding of the task.
 4. Ensure study source artifacts are available.
   - If source artifacts are missing, use the `abstractor-study-download` skill, then rerun workspace discovery.
@@ -47,7 +47,7 @@ uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation workspace describ
 9. Generate any additional cBioPortal files supported by the available evidence.
   - Use delegated skills when they exist for the file type.
   - Otherwise follow `cBioPortal_Data_Curation_SOP` and `cBioPortal_File_Formats` directly.
-10. Save all generated cBioPortal data and metadata files under `workspace.curated`.
+10. Save all generated cBioPortal data and metadata files under `result.workspace.curated`.
 11. Validate the generated dataset through the package CLI and the project selected by `CBIO_CURATION_ASSISTANT_HOME`:
 ```bash
 uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation validate-study \
@@ -75,5 +75,5 @@ Interpret validator results carefully: a warning-only run may return a non-zero 
 
 ## Output expectations
 - The workflow should produce:
-  - a cBioPortal dataset under `workspace.curated`
+  - a cBioPortal dataset under `result.workspace.curated`
   - validator artifacts reported by the `validate-study` command

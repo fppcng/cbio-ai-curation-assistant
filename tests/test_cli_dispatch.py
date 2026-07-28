@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -41,14 +42,22 @@ class CliDispatchTest(unittest.TestCase):
         self.assertEqual(code, 0)
         workspace.assert_called_once_with(["describe", "--study-id", "pmc1"])
 
-    def test_unexpected_command_failure_is_rendered_on_stderr(self) -> None:
+    def test_unexpected_command_failure_is_rendered_as_json(self) -> None:
+        stdout = io.StringIO()
         stderr = io.StringIO()
         with patch.object(cli, "_run_script", side_effect=RuntimeError("broken")):
-            with contextlib.redirect_stderr(stderr):
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
                 code = cli.main(["study-download"])
 
         self.assertEqual(code, 1)
-        self.assertEqual(stderr.getvalue(), "RuntimeError: broken\n")
+        self.assertEqual(stderr.getvalue(), "")
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["command"], "study-download")
+        self.assertEqual(payload["status"], "error")
+        self.assertEqual(
+            payload["error"],
+            {"type": "RuntimeError", "message": "broken"},
+        )
 
     def test_run_script_resolves_the_configured_skill_path(self) -> None:
         assistant_home = Path("/fixture/repository")

@@ -32,13 +32,17 @@ The tool does not modify any files.
 
 import argparse
 import csv
-import json
 import re
 from dataclasses import asdict, dataclass
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
+from cbio_curation_assistant.command_result import (
+    command_error,
+    command_result,
+    emit_command_result,
+)
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_ONCOTREE_PATH = SCRIPT_DIR / "oncotree_latest_table.txt"
@@ -438,7 +442,10 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Print output as JSON instead of a readable text report.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if not args.query and not args.clinical_file:
+        parser.error("Provide --query, --clinical-file, or both.")
+    return args
 
 
 def print_query_report(query: str, results: list[dict[str, Any]]) -> None:
@@ -523,29 +530,36 @@ def main() -> int:
         Process exit code.
     """
     args = parse_args()
-    candidates = load_oncotree_candidates(args.oncotree_table)
-    output: dict[str, Any] = {}
+    try:
+        candidates = load_oncotree_candidates(args.oncotree_table)
+        output: dict[str, Any] = {}
 
-    if args.query:
-        output["query_results"] = search_oncotree(
-            query=args.query,
-            candidates=candidates,
-            limit=args.limit,
-            minimum_score=args.minimum_score,
-        )
+        if args.query:
+            output["query_results"] = search_oncotree(
+                query=args.query,
+                candidates=candidates,
+                limit=args.limit,
+                minimum_score=args.minimum_score,
+            )
 
-    if args.clinical_file:
-        output["clinical_inspection"] = inspect_clinical_sample(
-            clinical_file=args.clinical_file,
-            candidates=candidates,
-            limit=args.limit,
-        )
-
-    if not output:
-        raise SystemExit("Provide --query, --clinical-file, or both.")
+        if args.clinical_file:
+            output["clinical_inspection"] = inspect_clinical_sample(
+                clinical_file=args.clinical_file,
+                candidates=candidates,
+                limit=args.limit,
+            )
+    except Exception as exc:
+        emit_command_result(command_error("oncotree-search", exc))
+        return 1
 
     if args.json:
-        print(json.dumps(output, indent=2))
+        emit_command_result(
+            command_result(
+                "oncotree-search",
+                status="success",
+                result=output,
+            )
+        )
         return 0
 
     if args.query:

@@ -8,6 +8,11 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
+from cbio_curation_assistant.command_result import (
+    command_error,
+    command_result,
+    emit_command_result,
+)
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_DICTIONARY_PATH = SCRIPT_DIR / "dictionary.json"
@@ -286,17 +291,27 @@ def main() -> int:
         Process exit code.
     """
     args = parse_args()
-    dictionary = load_dictionary(args.dictionary)
-    candidates = search_candidates(
-        original_column_name=args.source_column,
-        considered_column_name=args.considered_column,
-        dictionary=dictionary,
-        limit=args.limit,
-        minimum_score=args.minimum_score,
-    )
+    try:
+        dictionary = load_dictionary(args.dictionary)
+        candidates = search_candidates(
+            original_column_name=args.source_column,
+            considered_column_name=args.considered_column,
+            dictionary=dictionary,
+            limit=args.limit,
+            minimum_score=args.minimum_score,
+        )
+    except Exception as exc:
+        emit_command_result(command_error("clinical-dictionary", exc))
+        return 1
 
     if args.json:
-        print(json.dumps(candidates, indent=2))
+        emit_command_result(
+            command_result(
+                "clinical-dictionary",
+                status="success",
+                result=candidates,
+            )
+        )
     else:
         print_text_report(args.source_column, args.considered_column, candidates)
 

@@ -10,6 +10,12 @@ import tempfile
 from pathlib import Path
 from typing import Any, Sequence
 
+from cbio_curation_assistant.command_result import (
+    command_error,
+    command_result,
+    emit_command_result,
+    exit_code_for_status,
+)
 from cbio_curation_assistant.pmc_supplement_fetcher import (
     PMCRequestError,
     ResolvedStudyIdentifier,
@@ -253,7 +259,7 @@ def _build_result_payload(
         "supplementary": supplementary_reused,
         "article_pdf": article_pdf_reused,
     }
-    status = "partial_success" if warnings else "reused" if all(reused.values()) else "success"
+    status = "partial_success" if warnings else "success"
 
     xml_record = _build_file_record(
         workspace,
@@ -274,7 +280,7 @@ def _build_result_payload(
         "schema_version": DOWNLOAD_RESULT_VERSION,
         "manifest_version": DOWNLOAD_RESULT_VERSION,
         "status": status,
-        "success": True,
+        "success": status == "success",
         "study_id": workspace.study_id,
         "study_manifest": workspace.relative_to_root(workspace.manifest_path),
         "download_manifest": workspace.relative_to_root(workspace.download_manifest_path),
@@ -362,7 +368,22 @@ def run_study_download(
 
 
 def _emit(payload: dict[str, Any]) -> None:
-    print(json.dumps(payload, indent=2, ensure_ascii=False))
+    emit_command_result(payload)
+
+
+def _response_from_download_result(result: dict[str, Any]) -> dict[str, Any]:
+    status = result["status"]
+    response_result = dict(result)
+    response_result.pop("schema_version", None)
+    response_result.pop("status", None)
+    response_result.pop("success", None)
+    warnings = response_result.pop("warnings", [])
+    return command_result(
+        "study-download",
+        status=status,
+        result=response_result,
+        warnings=warnings,
+    )
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -407,28 +428,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             identifier_type=args.identifier_type,
         )
     except PMCRequestError as exc:
-        _emit(
-            {
-                "schema_version": DOWNLOAD_RESULT_VERSION,
-                "status": "error",
-                "success": False,
-                "error": _format_pmc_error(exc),
-            }
-        )
+        _emit(command_error("study-download", _format_pmc_error(exc)))
         return 1
     except Exception as exc:
-        _emit(
-            {
-                "schema_version": DOWNLOAD_RESULT_VERSION,
-                "status": "error",
-                "success": False,
-                "error": f"{type(exc).__name__}: {exc}",
-            }
-        )
+        _emit(command_error("study-download", exc))
         return 1
 
-    _emit(result)
-    return 0
+    response = _response_from_download_result(result)
+    _emit(response)
+    return exit_code_for_status(response["status"])
 
 
 if __name__ == "__main__":

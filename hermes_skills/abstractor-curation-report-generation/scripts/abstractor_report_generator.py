@@ -17,6 +17,11 @@ import os
 from pathlib import Path
 from typing import Any, Sequence
 
+from cbio_curation_assistant.command_result import (
+    command_error,
+    command_result,
+    emit_command_result,
+)
 from cbio_curation_assistant.cbioportal_curator import _analyse_supplementary_files, _extract_metadata_llm, _extract_pdf_text
 from cbio_curation_assistant.cli_shared import extract_xml_metadata_with_llm
 from cbio_curation_assistant.config import LLMConfig
@@ -31,7 +36,6 @@ from cbio_curation_assistant.workspace import InvalidStudyIdError, StudyWorkspac
 logger = logging.getLogger(__name__)
 
 _DEFAULT_REPORT_SUFFIX = "abstractor_report"
-_AGENT_REPORT_SCHEMA_VERSION = 1
 
 
 def _is_supported_supplementary_file(path: Path) -> bool:
@@ -358,10 +362,7 @@ def _build_agent_report(
     agent_report_json_path: str | None,
 ) -> dict[str, Any]:
     supplementary_paths = [str(Path(path).expanduser().resolve()) for path in inputs.get("supplementary_paths", [])]
-    return {
-        "schema_version": _AGENT_REPORT_SCHEMA_VERSION,
-        "status": "success",
-        "success": True,
+    result = {
         "study_id": study_workspace.study_id if study_workspace is not None else None,
         "paper_source": {
             "type": inputs.get("paper_source_type"),
@@ -383,8 +384,13 @@ def _build_agent_report(
             "curation_report_json": report_json_path,
             "agent_report_json": agent_report_json_path,
         },
-        "warnings": list(warnings),
     }
+    return command_result(
+        "curation-report",
+        status="success",
+        result=result,
+        warnings=warnings,
+    )
 
 
 def run_curation_orchestrator(
@@ -489,7 +495,7 @@ def run_curation_orchestrator(
         agent_report_json_path=resolved_agent_report_path,
     )
     agent_report_json_path = _write_json(resolved_agent_report_path, agent_report) if resolved_agent_report_path else None
-    agent_report["outputs"]["agent_report_json"] = agent_report_json_path
+    agent_report["result"]["outputs"]["agent_report_json"] = agent_report_json_path
 
     return {
         "report": report,
@@ -545,10 +551,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
     except Exception as exc:
         logger.error("%s", exc)
+        emit_command_result(command_error("curation-report", exc))
         return 1
 
-    rendered = json.dumps(result["agent_report"], indent=2, ensure_ascii=False)
-    print(rendered)
+    emit_command_result(result["agent_report"])
     return 0
 
 

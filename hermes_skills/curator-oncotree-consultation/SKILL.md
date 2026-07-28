@@ -26,20 +26,20 @@ uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation oncotree-search \
   --json
 ```
 
-If you need to inspect a study clinical sample file, first run workspace discovery and derive the file path from `workspace.curated`:
+If you need to inspect a study clinical sample file, first run workspace discovery and derive the file path from `result.workspace.curated`:
 ```bash
 uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation workspace describe \
   --study-id <study_id>
 
 uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation oncotree-search \
-  --clinical-file "<workspace.curated>/data_clinical_sample.txt" \
+  --clinical-file "<result.workspace.curated>/data_clinical_sample.txt" \
   --json
 ```
 
 ## Mapping workflow
 
 1. Search using the original disease name, histology, diagnosis, cancer type, subtype, or other tumor classification information from the source data.
-2. Review the returned OncoTree candidates before selecting a mapping.
+2. Check that the JSON envelope has `status: success`, then review the returned OncoTree candidates under `result` before selecting a mapping.
 3. Use the best supported OncoTree match based on the available evidence.
 4. When appropriate, use OncoTree results to help define:
 
@@ -52,4 +52,3 @@ uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation oncotree-search \
 ## Important rule
 
 The OncoTree search tool returns candidate mappings only. It does not make the final mapping decision. The agent must inspect the candidate metadata and select the mapping that best preserves the source meaning.
-

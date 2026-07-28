@@ -122,8 +122,40 @@ class StudyDownloadWorkflowTest(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
         self.assertEqual(code, 1)
         self.assertEqual(payload["status"], "error")
-        self.assertFalse(payload["success"])
-        self.assertIn("HTTP 404", payload["error"])
+        self.assertEqual(payload["command"], "study-download")
+        self.assertIn("HTTP 404", payload["error"]["message"])
+
+    def test_main_returns_three_for_partial_success(self) -> None:
+        download_result = {
+            "schema_version": 1,
+            "status": "partial_success",
+            "success": False,
+            "study_id": "pmc123",
+            "warnings": ["article PDF was unavailable"],
+        }
+        stdout = io.StringIO()
+        args = argparse.Namespace(
+            identifier="PMC123",
+            identifier_type="pmcid",
+            log_level="INFO",
+        )
+        with (
+            patch.object(self.workflow, "_build_parser") as parser,
+            patch.object(
+                self.workflow,
+                "run_study_download",
+                return_value=download_result,
+            ),
+            contextlib.redirect_stdout(stdout),
+        ):
+            parser.return_value.parse_args.return_value = args
+            code = self.workflow.main([])
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(code, 3)
+        self.assertEqual(payload["status"], "partial_success")
+        self.assertEqual(payload["result"]["study_id"], "pmc123")
+        self.assertEqual(payload["warnings"], ["article PDF was unavailable"])
 
 
 class CurationReportWorkflowTest(unittest.TestCase):
@@ -212,7 +244,7 @@ class CurationReportWorkflowTest(unittest.TestCase):
         self.assertEqual(persisted, {"report_title": "Fixture"})
         self.assertTrue(Path(result["pdf_path"]).is_absolute())
 
-    def test_report_main_returns_one_without_structured_error_output(self) -> None:
+    def test_report_main_returns_structured_error_output(self) -> None:
         stdout = io.StringIO()
         with (
             patch.object(
@@ -226,7 +258,13 @@ class CurationReportWorkflowTest(unittest.TestCase):
             code = self.workflow.main(["--study-id", "pmc123"])
 
         self.assertEqual(code, 1)
-        self.assertEqual(stdout.getvalue(), "")
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["command"], "curation-report")
+        self.assertEqual(payload["status"], "error")
+        self.assertEqual(
+            payload["error"],
+            {"type": "FileNotFoundError", "message": "missing"},
+        )
         error_log.assert_called_once()
         self.assertEqual(error_log.call_args.args[0], "%s")
         self.assertEqual(str(error_log.call_args.args[1]), "missing")
@@ -303,13 +341,16 @@ class GenomeNexusWorkflowTest(unittest.TestCase):
 
         payload = json.loads(stdout.getvalue())
         self.assertEqual(code, 1)
-        self.assertEqual(payload, {"status": "error", "error": "missing workspace"})
+        self.assertEqual(payload["command"], "genome-nexus")
+        self.assertEqual(payload["status"], "error")
+        self.assertEqual(payload["error"]["message"], "missing workspace")
+        self.assertIsNone(payload["result"])
 
     def test_main_emits_success_json_for_valid_mocked_pipeline_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             workspace = Path(tmp_dir)
             input_path = workspace / self.workflow.MINIMAL_MAF_FILENAME
-            output_path = workspace / self.workflow.OUTPUT_MAF_FILENAME
+            attempt_dir = workspace / "attempt"
             input_path.write_text(self.maf_text(), encoding="utf-8")
             args = SimpleNamespace(
                 study_id="pmc123",
@@ -320,17 +361,26 @@ class GenomeNexusWorkflowTest(unittest.TestCase):
             )
 
             def run_pipeline(*args: object, **kwargs: object) -> SimpleNamespace:
-                output_path.write_text(
+                (attempt_dir / self.workflow.OUTPUT_MAF_FILENAME).write_text(
                     self.maf_text(include_status=True),
                     encoding="utf-8",
                 )
                 return SimpleNamespace(returncode=0, stdout="ok", stderr="")
+
+            def create_attempt(*args: object, **kwargs: object) -> Path:
+                attempt_dir.mkdir()
+                return attempt_dir
 
             stdout = io.StringIO()
             with (
                 patch.object(self.workflow, "parse_args", return_value=args),
                 patch.object(self.workflow, "resolve_workspace", return_value=workspace),
                 patch.object(self.workflow, "check_docker"),
+                patch.object(
+                    self.workflow,
+                    "create_attempt_directory",
+                    side_effect=create_attempt,
+                ),
                 patch.object(
                     self.workflow.subprocess,
                     "run",
@@ -341,17 +391,23 @@ class GenomeNexusWorkflowTest(unittest.TestCase):
                 code = self.workflow.main()
 
             payload = json.loads(stdout.getvalue())
+            canonical_output_exists = (
+                workspace / self.workflow.OUTPUT_MAF_FILENAME
+            ).is_file()
+            attempt_exists = attempt_dir.exists()
 
         self.assertEqual(code, 0)
         self.assertEqual(payload["status"], "success")
-        self.assertEqual(payload["input_records"], 1)
-        self.assertEqual(payload["successful_annotations"], 1)
+        self.assertEqual(payload["result"]["input_records"], 1)
+        self.assertEqual(payload["result"]["successful_annotations"], 1)
+        self.assertTrue(canonical_output_exists)
+        self.assertFalse(attempt_exists)
 
     def test_main_reports_partial_success_for_record_count_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             workspace = Path(tmp_dir)
             input_path = workspace / self.workflow.MINIMAL_MAF_FILENAME
-            output_path = workspace / self.workflow.OUTPUT_MAF_FILENAME
+            attempt_dir = workspace / "attempt"
             input_path.write_text(self.maf_text(), encoding="utf-8")
             args = SimpleNamespace(
                 study_id="pmc123",
@@ -362,9 +418,105 @@ class GenomeNexusWorkflowTest(unittest.TestCase):
             )
 
             def run_pipeline(*args: object, **kwargs: object) -> SimpleNamespace:
-                output_path.write_text(
+                (attempt_dir / self.workflow.OUTPUT_MAF_FILENAME).write_text(
                     self.maf_text(include_status=True)
                     + "17\t2\t2\tG\tC\tS2\tSUCCESS\n",
+                    encoding="utf-8",
+                )
+                return SimpleNamespace(returncode=0, stdout="ok", stderr="")
+
+            def create_attempt(*args: object, **kwargs: object) -> Path:
+                attempt_dir.mkdir()
+                return attempt_dir
+
+            stdout = io.StringIO()
+            with (
+                patch.object(self.workflow, "parse_args", return_value=args),
+                patch.object(self.workflow, "resolve_workspace", return_value=workspace),
+                patch.object(self.workflow, "check_docker"),
+                patch.object(
+                    self.workflow,
+                    "create_attempt_directory",
+                    side_effect=create_attempt,
+                ),
+                patch.object(self.workflow.subprocess, "run", side_effect=run_pipeline),
+                contextlib.redirect_stdout(stdout),
+            ):
+                code = self.workflow.main()
+
+            payload = json.loads(stdout.getvalue())
+            candidate_exists = (
+                attempt_dir / self.workflow.OUTPUT_MAF_FILENAME
+            ).is_file()
+            canonical_output_exists = (
+                workspace / self.workflow.OUTPUT_MAF_FILENAME
+            ).exists()
+
+        self.assertEqual(code, 3)
+        self.assertEqual(payload["status"], "partial_success")
+        self.assertTrue(payload["result"]["record_count_mismatch"])
+        self.assertEqual(payload["result"]["attempt_directory"], str(attempt_dir))
+        self.assertTrue(candidate_exists)
+        self.assertFalse(canonical_output_exists)
+
+    def test_force_preflight_failure_preserves_existing_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            workspace = Path(tmp_dir)
+            input_path = workspace / self.workflow.MINIMAL_MAF_FILENAME
+            output_path = workspace / self.workflow.OUTPUT_MAF_FILENAME
+            input_path.write_text(self.maf_text(), encoding="utf-8")
+            output_path.write_text("previous output\n", encoding="utf-8")
+            args = SimpleNamespace(
+                study_id="pmc123",
+                genome_build="GRCh37",
+                image="image",
+                timeout=1,
+                force=True,
+            )
+
+            stdout = io.StringIO()
+            with (
+                patch.object(self.workflow, "parse_args", return_value=args),
+                patch.object(self.workflow, "resolve_workspace", return_value=workspace),
+                patch.object(
+                    self.workflow,
+                    "check_docker",
+                    side_effect=self.workflow.PipelineError("docker unavailable"),
+                ),
+                patch.object(self.workflow, "create_attempt_directory") as create_attempt,
+                contextlib.redirect_stdout(stdout),
+            ):
+                code = self.workflow.main()
+
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(code, 1)
+            self.assertEqual(payload["status"], "error")
+            self.assertEqual(output_path.read_text(encoding="utf-8"), "previous output\n")
+            create_attempt.assert_not_called()
+
+    def test_partial_force_run_preserves_existing_canonical_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            workspace = Path(tmp_dir)
+            attempt_dir = workspace / "attempt"
+            input_path = workspace / self.workflow.MINIMAL_MAF_FILENAME
+            output_path = workspace / self.workflow.OUTPUT_MAF_FILENAME
+            input_path.write_text(self.maf_text(), encoding="utf-8")
+            output_path.write_text("previous output\n", encoding="utf-8")
+            args = SimpleNamespace(
+                study_id="pmc123",
+                genome_build="GRCh37",
+                image="image",
+                timeout=1,
+                force=True,
+            )
+
+            def create_attempt(*args: object, **kwargs: object) -> Path:
+                attempt_dir.mkdir()
+                return attempt_dir
+
+            def run_pipeline(*args: object, **kwargs: object) -> SimpleNamespace:
+                (attempt_dir / self.workflow.OUTPUT_MAF_FILENAME).write_text(
+                    self.maf_text(include_status=True, status="FAILED"),
                     encoding="utf-8",
                 )
                 return SimpleNamespace(returncode=0, stdout="ok", stderr="")
@@ -374,16 +526,68 @@ class GenomeNexusWorkflowTest(unittest.TestCase):
                 patch.object(self.workflow, "parse_args", return_value=args),
                 patch.object(self.workflow, "resolve_workspace", return_value=workspace),
                 patch.object(self.workflow, "check_docker"),
+                patch.object(
+                    self.workflow,
+                    "create_attempt_directory",
+                    side_effect=create_attempt,
+                ),
                 patch.object(self.workflow.subprocess, "run", side_effect=run_pipeline),
                 contextlib.redirect_stdout(stdout),
             ):
                 code = self.workflow.main()
 
             payload = json.loads(stdout.getvalue())
+            self.assertEqual(code, 3)
+            self.assertEqual(payload["status"], "partial_success")
+            self.assertEqual(output_path.read_text(encoding="utf-8"), "previous output\n")
+            self.assertTrue(payload["result"]["canonical_outputs_preserved"])
+            self.assertTrue((attempt_dir / self.workflow.OUTPUT_MAF_FILENAME).is_file())
 
-        self.assertEqual(code, 2)
-        self.assertEqual(payload["status"], "partial_success")
-        self.assertTrue(payload["record_count_mismatch"])
+    def test_failed_promotion_rolls_back_all_canonical_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            workspace = root / "curated"
+            attempt_dir = root / "validation" / "attempts" / "attempt"
+            workspace.mkdir()
+            attempt_dir.mkdir(parents=True)
+            canonical = self.workflow.canonical_paths(workspace)
+            candidates = self.workflow.canonical_paths(attempt_dir)
+
+            for key in ("output", "error_report", "log"):
+                canonical[key].write_text(f"old {key}\n", encoding="utf-8")
+                candidates[key].write_text(f"new {key}\n", encoding="utf-8")
+
+            real_replace = self.workflow.os.replace
+            failed_once = False
+
+            def fail_during_promotion(source: object, target: object) -> None:
+                nonlocal failed_once
+                if Path(source) == candidates["error_report"] and not failed_once:
+                    failed_once = True
+                    raise OSError("promotion failed")
+                real_replace(source, target)
+
+            with patch.object(
+                self.workflow.os,
+                "replace",
+                side_effect=fail_during_promotion,
+            ):
+                with self.assertRaisesRegex(OSError, "promotion failed"):
+                    self.workflow.promote_attempt_outputs(
+                        candidates,
+                        canonical,
+                        attempt_dir,
+                    )
+
+            for key in ("output", "error_report", "log"):
+                self.assertEqual(
+                    canonical[key].read_text(encoding="utf-8"),
+                    f"old {key}\n",
+                )
+                self.assertEqual(
+                    candidates[key].read_text(encoding="utf-8"),
+                    f"new {key}\n",
+                )
 
 
 if __name__ == "__main__":

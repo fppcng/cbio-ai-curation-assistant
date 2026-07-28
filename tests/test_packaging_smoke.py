@@ -121,7 +121,7 @@ class InstalledWheelSmokeTest(unittest.TestCase):
             self.assertEqual(completed.returncode, 0, completed.stderr)
             payload = json.loads(completed.stdout)
             self.assertEqual(payload["status"], "success")
-            self.assertEqual(payload["study_id"], "pmc123")
+            self.assertEqual(payload["result"]["study_id"], "pmc123")
 
 
 if __name__ == "__main__":

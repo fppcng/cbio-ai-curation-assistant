@@ -13,7 +13,7 @@ Use this skill when the user asks to generate structural variant or fusion files
 
 ## Required references
 Read:
-- `references/structural_variant_files_SOP.md`
+- `references/structural_variant_file_formats.md`
 
 ## Main rules
 - Only create `data_sv.txt` and `meta_sv.txt` from real per-sample structural variant or fusion rows present in local tables, spreadsheets, manifests, or reportable study artifacts.
@@ -41,27 +41,27 @@ At minimum, each emitted row must have:
 uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation workspace describe \
   --study-id <study_id>
 ```
-2. Use only the absolute paths returned by discovery. Do not infer paths from repository layout.
-3. Ensure study source artifacts are available by inspecting `workspace.source` and relevant discovery availability fields.
+2. Use only the absolute paths returned under discovery `result`. Do not infer paths from repository layout.
+3. Ensure study source artifacts are available by inspecting `result.workspace.source` and relevant discovery availability fields.
   - If the required publication or supplementary files are missing, use the `abstractor-study-download` skill, then rerun workspace discovery.
-4. Ensure the study abstractor agent report is available using `artifacts.curation_report_agent` and `availability.curation_report_agent`.
+4. Ensure the study abstractor agent report is available using `result.artifacts.curation_report_agent` and `result.availability.curation_report_agent`.
   - If it is missing, use the `abstractor-curation-report-generation` skill, then rerun workspace discovery.
 5. Read the abstractor agent report to identify promising supplementary files. Use it as supporting context, not as a substitute for inspecting the source files directly.
 6. Read candidate supplementary files directly from the discovered source/supplementary paths to determine whether they contain real per-sample rows that satisfy the minimum evidence requirements. Do not make that decision from the abstractor report alone.
   - When a candidate file is an Excel workbook, inspect any cell comments, notes, or annotations that may affect interpretation of the data.
 7. Determine whether the source contains real per-sample rows that satisfy the minimum evidence requirements.
   - If not, do not create the structural variant files; report that the study does not currently support source-grounded SV curation.
-8. Normalize sample identifiers against `data_clinical_sample.txt` under `workspace.curated` when that file already exists.
+8. Normalize sample identifiers against `data_clinical_sample.txt` under `result.workspace.curated` when that file already exists.
   - Do not silently rewrite sample identifiers to values that cannot be traced back to the source or clinical sample file.
   - If the source uses a trivially different delimiter form (for example `-` in one sheet and `_` in the clinical sample file) and the mapping is one-to-one, normalize it explicitly and report that normalization.
 9. Determine the study genome build from the study metadata or the source artifacts before writing `NCBI_Build`.
   - If the source rows would require mixed builds or the build cannot be determined for rows that need it, report the issue instead of guessing.
-10. Create `data_sv.txt` under `workspace.curated`.
+10. Create `data_sv.txt` under `result.workspace.curated`.
   - Include the required columns for every emitted row.
   - Add optional columns only when they are directly supported by the source data.
   - When the source provides fusion-partner genes but not breakpoint-level detail, it is acceptable to create rows with the supported gene-site fields only.
   - Preserve source meaning when mapping into cBioPortal fields such as `Class`, `Event_Info`, `Annotation`, `Connection_Type`, and read-support columns.
-11. Create `meta_sv.txt` under `workspace.curated` with cBioPortal-compliant structural variant metadata.
+11. Create `meta_sv.txt` under `result.workspace.curated` with cBioPortal-compliant structural variant metadata.
   - Use `genetic_alteration_type: STRUCTURAL_VARIANT`
   - Use `datatype: SV`
   - Use `stable_id: structural_variants`
@@ -77,7 +77,7 @@ uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation workspace describ
   - Remove or blank obviously invalid pseudo-gene values before writing `Site1_Hugo_Symbol` / `Site2_Hugo_Symbol` (for example numeric placeholders or Excel-mangled non-symbol artifacts) unless you can map them confidently to a real supported gene symbol.
 
 ## Output
-Report these outcomes using paths derived from `workspace.curated`:
+Report these outcomes using paths derived from `result.workspace.curated`:
 - `data_sv.txt` when source-supported structural variant rows were generated
 - `meta_sv.txt` when a structural variant profile was generated
 - whether the study had sufficient evidence for structural variant curation

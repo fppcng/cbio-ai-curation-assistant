@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import runpy
 import sys
@@ -11,6 +10,11 @@ from collections.abc import Sequence
 from contextlib import contextmanager
 from pathlib import Path
 
+from cbio_curation_assistant.command_result import (
+    command_error,
+    command_result,
+    emit_command_result,
+)
 from cbio_curation_assistant.workspace import (
     ENV_VAR_NAME,
     StudyWorkspace,
@@ -164,7 +168,16 @@ def _run_workspace_describe(study_id: str) -> int:
         assistant_home=_assistant_home(),
         require_manifest=True,
     )
-    print(json.dumps(workspace.discovery_payload(), indent=2, ensure_ascii=False))
+    discovery = workspace.discovery_payload()
+    discovery.pop("schema_version", None)
+    discovery.pop("status", None)
+    emit_command_result(
+        command_result(
+            "workspace.describe",
+            status="success",
+            result=discovery,
+        )
+    )
     return 0
 
 
@@ -190,10 +203,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _run_workspace(args.args)
         return _run_script(args.command, args.args)
     except WorkspaceError as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
+        emit_command_result(command_error(args.command, exc))
         return 1
     except Exception as exc:
-        print(f"{type(exc).__name__}: {exc}", file=sys.stderr)
+        emit_command_result(command_error(args.command, exc))
         return 1
 
 

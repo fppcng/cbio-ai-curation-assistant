@@ -12,9 +12,9 @@ required_environment_variables:
 uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation workspace describe \
   --study-id <study_id>
 ```
-2. Use only the absolute paths returned by discovery. Do not infer paths from repository layout.
+2. Use only the absolute paths returned under discovery `result`. Do not infer paths from repository layout.
 3. Read the documentation in `references/` to understand the required structure and formatting of cBioPortal clinical data files.
-4. Read the abstractor agent report from `artifacts.curation_report_agent` when available. Use it as supporting context, not as a substitute for inspecting the source files directly. If it is not present, generate it with the `abstractor-curation-report-generation` skill, then rerun workspace discovery.
+4. Read the abstractor agent report from `result.artifacts.curation_report_agent` when available. Use it as supporting context, not as a substitute for inspecting the source files directly. If it is not present, generate it with the `abstractor-curation-report-generation` skill, then rerun workspace discovery.
 5. Select the supplementary files that may contain clinical data based on:
   - the abstractor agent report;
   - filenames;
@@ -29,12 +29,12 @@ uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation clinical-dictiona
   --considered-column "<candidate_cbioportal_column>" \
   --json
 ```
-Review the returned candidates to determine:
+Check that the envelope has `status: success`, then review the candidates under `result` to determine:
   - the standard cBioPortal column header;
   - whether the attribute belongs in `data_clinical_sample.txt` or `data_clinical_patient.txt`;
   - the datatype, display name, and description.
 Select a candidate only when its meaning matches the source attribute. Do not choose a result based only on name similarity. If no candidate preserves the source meaning, create an appropriate custom attribute.
-9. Generate clinical files under `workspace.curated`:
+9. Generate clinical files under `result.workspace.curated`:
   - `meta_clinical_sample.txt`;
   - `data_clinical_sample.txt`;
   - `meta_clinical_patient.txt`, only when patient-level data is available.

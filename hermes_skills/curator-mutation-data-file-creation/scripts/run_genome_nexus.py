@@ -19,14 +19,21 @@ from __future__ import annotations
 
 import argparse
 import csv
-import json
 import os
 import shutil
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
 from typing import Any, Iterable
 
 import _repo_bootstrap  # noqa: F401
+from cbio_curation_assistant.command_result import (
+    command_error,
+    command_result,
+    emit_command_result,
+    exit_code_for_status,
+)
 from cbio_curation_assistant.workspace import StudyWorkspace
 
 
@@ -50,6 +57,15 @@ REQUIRED_COLUMNS = {
 
 class PipelineError(RuntimeError):
     """Expected pipeline failure with a user-readable message."""
+
+
+def subprocess_text(value: str | bytes | None) -> str:
+    """Normalize subprocess output, including bytes attached to timeout errors."""
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
 
 
 def parse_args() -> argparse.Namespace:
@@ -88,7 +104,7 @@ def parse_args() -> argparse.Namespace:
 
 def emit(payload: dict[str, Any]) -> None:
     """Print exactly one JSON payload for Hermes."""
-    print(json.dumps(payload, indent=2, ensure_ascii=False))
+    emit_command_result(payload)
 
 
 def data_lines(path: Path) -> Iterable[str]:
@@ -183,21 +199,19 @@ def check_docker(image: str) -> None:
         )
 
 
-def remove_existing(paths: Iterable[Path], force: bool) -> None:
-    """Reject or remove existing outputs."""
+def check_existing_outputs(paths: Iterable[Path], force: bool) -> None:
+    """Validate overwrite policy without modifying existing outputs."""
     existing = [path for path in paths if path.exists()]
+
+    for path in existing:
+        if path.is_dir():
+            raise PipelineError(f"Expected a file but found a directory: {path}")
 
     if existing and not force:
         joined = ", ".join(str(path) for path in existing)
         raise PipelineError(
             f"Output already exists: {joined}. Use --force to overwrite."
         )
-
-    for path in existing:
-        if path.is_dir():
-            raise PipelineError(f"Expected a file but found a directory: {path}")
-        path.unlink()
-
 
 def canonical_paths(workspace: Path) -> dict[str, Path]:
     """Return the canonical mutation file layout inside the workspace."""
@@ -213,28 +227,102 @@ def resolve_workspace(study_id: str) -> Path:
     return StudyWorkspace.load(study_id).curated_dir
 
 
-def main() -> int:
-    args = parse_args()
+def create_attempt_directory(workspace: Path) -> Path:
+    """Create a persistent directory for one isolated annotation attempt."""
+    attempts_root = workspace.parent / "validation" / "attempts"
+    attempts_root.mkdir(parents=True, exist_ok=True)
+    return Path(tempfile.mkdtemp(prefix="genome_nexus_", dir=attempts_root))
+
+
+def promote_attempt_outputs(
+    attempt_paths: dict[str, Path],
+    canonical_output_paths: dict[str, Path],
+    attempt_dir: Path,
+) -> None:
+    """Promote validated outputs, restoring previous files if promotion fails."""
+    keys = ("output", "error_report", "log")
+    backup_dir = attempt_dir / "previous_outputs"
+    backup_dir.mkdir()
+    backups: dict[str, Path] = {}
+    promoted: list[str] = []
 
     try:
+        for key in keys:
+            target = canonical_output_paths[key]
+            if target.exists():
+                backup = backup_dir / target.name
+                os.replace(target, backup)
+                backups[key] = backup
+
+        for key in keys:
+            source = attempt_paths[key]
+            target = canonical_output_paths[key]
+            os.replace(source, target)
+            promoted.append(key)
+    except Exception:
+        for key in reversed(promoted):
+            target = canonical_output_paths[key]
+            source = attempt_paths[key]
+            if target.exists():
+                os.replace(target, source)
+        for key, backup in backups.items():
+            if backup.exists():
+                os.replace(backup, canonical_output_paths[key])
+        if backup_dir.exists() and not any(backup_dir.iterdir()):
+            backup_dir.rmdir()
+        raise
+
+    shutil.rmtree(backup_dir)
+
+
+def _attempt_error_result(attempt_dir: Path | None) -> dict[str, Any] | None:
+    if attempt_dir is None:
+        return None
+    attempt_paths = canonical_paths(attempt_dir)
+    return {
+        "attempt_directory": str(attempt_dir),
+        "candidate_output_file": (
+            str(attempt_paths["output"])
+            if attempt_paths["output"].is_file()
+            else None
+        ),
+        "candidate_error_report": (
+            str(attempt_paths["error_report"])
+            if attempt_paths["error_report"].is_file()
+            else None
+        ),
+        "attempt_log_file": (
+            str(attempt_paths["log"])
+            if attempt_paths["log"].is_file()
+            else None
+        ),
+    }
+
+
+def main() -> int:
+    args = parse_args()
+    attempt_dir: Path | None = None
+
+    try:
+        if args.timeout <= 0:
+            raise PipelineError("Timeout must be greater than zero seconds.")
+
         workspace = resolve_workspace(args.study_id).resolve()
         if not workspace.is_dir():
             raise PipelineError(f"Workspace does not exist: {workspace}")
 
         paths = canonical_paths(workspace)
         input_path = paths["input"]
-        output_path = paths["output"]
-        error_path = paths["error_report"]
-        log_path = paths["log"]
-
-        remove_existing([output_path, error_path, log_path], force=args.force)
-
         input_summary = inspect_maf(input_path, require_status=False)
+        check_existing_outputs(
+            [paths["output"], paths["error_report"], paths["log"]],
+            force=args.force,
+        )
         check_docker(args.image)
 
-        relative_input = input_path.relative_to(workspace).as_posix()
-        relative_output = output_path.relative_to(workspace).as_posix()
-        relative_error = error_path.relative_to(workspace).as_posix()
+        attempt_dir = create_attempt_directory(workspace)
+        attempt_paths = canonical_paths(attempt_dir)
+        shutil.copy2(input_path, attempt_paths["input"])
 
         command = [
             "docker",
@@ -256,17 +344,17 @@ def main() -> int:
         command.extend(
             [
                 "-v",
-                f"{workspace}:/wd",
+                f"{attempt_dir}:/wd",
                 args.image,
                 "java",
                 "-jar",
                 "annotationPipeline.jar",
                 "--filename",
-                f"/wd/{relative_input}",
+                f"/wd/{MINIMAL_MAF_FILENAME}",
                 "--output-filename",
-                f"/wd/{relative_output}",
+                f"/wd/{OUTPUT_MAF_FILENAME}",
                 "--error-report-location",
-                f"/wd/{relative_error}",
+                f"/wd/{ERROR_REPORT_FILENAME}",
                 "--isoform-override",
                 "mskcc",
                 "--output-format",
@@ -285,8 +373,8 @@ def main() -> int:
                 timeout=args.timeout,
             )
         except subprocess.TimeoutExpired as exc:
-            log_path.write_text(
-                (exc.stdout or "") + "\n" + (exc.stderr or ""),
+            attempt_paths["log"].write_text(
+                subprocess_text(exc.stdout) + "\n" + subprocess_text(exc.stderr),
                 encoding="utf-8",
             )
             raise PipelineError(
@@ -297,21 +385,21 @@ def main() -> int:
             "COMMAND\n"
             + " ".join(command)
             + "\n\nSTDOUT\n"
-            + completed.stdout
+            + subprocess_text(completed.stdout)
             + "\n\nSTDERR\n"
-            + completed.stderr
+            + subprocess_text(completed.stderr)
         )
-        log_path.write_text(combined_log, encoding="utf-8")
+        attempt_paths["log"].write_text(combined_log, encoding="utf-8")
 
         # Do not trust the process return code alone. Some pipeline-level
         # failures may still leave a successful container exit or partial file.
         if completed.returncode != 0:
             raise PipelineError(
                 "Genome Nexus container failed with exit code "
-                f"{completed.returncode}. See log: {log_path}"
+                f"{completed.returncode}. See log: {attempt_paths['log']}"
             )
 
-        output_summary = inspect_maf(output_path, require_status=True)
+        output_summary = inspect_maf(attempt_paths["output"], require_status=True)
 
         count_mismatch = (
             input_summary["records"] != output_summary["records"]
@@ -324,15 +412,21 @@ def main() -> int:
             else "success"
         )
 
-        result = {
-            "status": status,
+        warnings: list[str] = []
+        if count_mismatch:
+            warnings.append(
+                "Genome Nexus output record count does not match the input record count."
+            )
+        if has_failed_annotations:
+            warnings.append(
+                f"Genome Nexus reported {output_summary['failed_annotations']} failed annotations."
+            )
+
+        result: dict[str, Any] = {
             "genome_build": args.genome_build,
             "docker_image": args.image,
             "workspace": str(workspace),
             "input_file": str(input_path),
-            "output_file": str(output_path),
-            "error_report": str(error_path),
-            "log_file": str(log_path),
             "input_records": input_summary["records"],
             "output_records": output_summary["records"],
             "successful_annotations": output_summary[
@@ -344,19 +438,72 @@ def main() -> int:
             ],
             "record_count_mismatch": count_mismatch,
         }
-        emit(result)
 
-        return 0 if status == "success" else 2
+        if status == "partial_success":
+            result.update(
+                {
+                    "attempt_directory": str(attempt_dir),
+                    "candidate_output_file": str(attempt_paths["output"]),
+                    "candidate_error_report": (
+                        str(attempt_paths["error_report"])
+                        if attempt_paths["error_report"].is_file()
+                        else None
+                    ),
+                    "attempt_log_file": str(attempt_paths["log"]),
+                    "canonical_output_file": (
+                        str(paths["output"]) if paths["output"].is_file() else None
+                    ),
+                    "canonical_outputs_preserved": any(
+                        path.exists()
+                        for path in (paths["output"], paths["error_report"], paths["log"])
+                    ),
+                }
+            )
+            response = command_result(
+                "genome-nexus",
+                status="partial_success",
+                result=result,
+                warnings=warnings,
+            )
+            emit(response)
+            return exit_code_for_status("partial_success")
+
+        if not attempt_paths["error_report"].exists():
+            attempt_paths["error_report"].write_text("", encoding="utf-8")
+        promote_attempt_outputs(attempt_paths, paths, attempt_dir)
+        shutil.rmtree(attempt_dir)
+        attempt_dir = None
+        result.update(
+            {
+                "output_file": str(paths["output"]),
+                "error_report": str(paths["error_report"]),
+                "log_file": str(paths["log"]),
+            }
+        )
+        response = command_result(
+            "genome-nexus",
+            status="success",
+            result=result,
+        )
+        emit(response)
+        return exit_code_for_status("success")
 
     except PipelineError as exc:
-        emit({"status": "error", "error": str(exc)})
+        emit(
+            command_error(
+                "genome-nexus",
+                exc,
+                result=_attempt_error_result(attempt_dir),
+            )
+        )
         return 1
     except Exception as exc:  # Defensive boundary for agent-facing execution.
         emit(
-            {
-                "status": "error",
-                "error": f"Unexpected error: {type(exc).__name__}: {exc}",
-            }
+            command_error(
+                "genome-nexus",
+                exc,
+                result=_attempt_error_result(attempt_dir),
+            )
         )
         return 1
 
