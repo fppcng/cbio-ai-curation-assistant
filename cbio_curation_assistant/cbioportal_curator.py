@@ -28,6 +28,7 @@ from cbio_curation_assistant.pdf_metadata_regex import (
     extract_metadata_regex as _extract_metadata_regex,
 )
 from cbio_curation_assistant.spec_match import ClassificationResult, classify_sheet
+from cbio_curation_assistant.supplements.models import SupplementaryClassification
 
 CURABILITY = {
     "CLINICAL_PATIENT": ("YES", "HIGH"),
@@ -263,44 +264,51 @@ def _extract_metadata_llm(pdf_text: str, llm_config: LLMConfig, temperature: flo
     return merged
 
 
-def _build_report_record(cr: ClassificationResult) -> dict[str, Any]:
+def _build_report_record(
+    cr: ClassificationResult,
+    *,
+    file_name: str,
+    sheet_name: str,
+) -> SupplementaryClassification:
     curability, priority = CURABILITY.get(cr.format_key, ("NO", "N/A"))
-    return {
-        "classification": cr.format_key,
-        "cbio_target_file": cr.target_file,
-        "curability": curability,
-        "priority": priority,
-        "confidence": cr.confidence,
-        "verdict": cr.verdict,
-        "required_present": cr.required_present,
-        "required_missing": cr.required_missing,
-        "optional_present": cr.optional_present,
-    }
+    return SupplementaryClassification(
+        file=file_name,
+        sheet=sheet_name,
+        classification=cr.format_key,
+        cbio_target_file=cr.target_file,
+        curability=curability,
+        priority=priority,
+        confidence=cr.confidence,
+        verdict=cr.verdict,
+        required_present=tuple(cr.required_present),
+        required_missing=tuple(cr.required_missing),
+        optional_present=tuple(cr.optional_present),
+    )
 
 
 def _build_failed_supplementary_record(
     file_name: str,
     sheet_name: str,
     error: Exception,
-) -> dict[str, Any]:
-    return {
-        "file": file_name,
-        "sheet": sheet_name,
-        "classification": "NOT_LOADABLE",
-        "cbio_target_file": "N/A",
-        "curability": "NO",
-        "priority": "N/A",
-        "confidence": 0,
-        "verdict": f"Parse error: {error}",
-        "required_present": [],
-        "required_missing": [],
-        "optional_present": [],
-    }
+) -> SupplementaryClassification:
+    return SupplementaryClassification(
+        file=file_name,
+        sheet=sheet_name,
+        classification="NOT_LOADABLE",
+        cbio_target_file=None,
+        curability="NO",
+        priority="N/A",
+        confidence=0,
+        verdict=f"Parse error: {error}",
+        load_error=str(error),
+    )
 
 
-def _analyse_supplementary_files(supp_paths: list[str]) -> list[dict[str, Any]]:
+def _analyse_supplementary_files(
+    supp_paths: list[str],
+) -> list[SupplementaryClassification]:
     """Inspect each sheet in each supplementary file and return report records."""
-    records: list[dict[str, Any]] = []
+    records: list[SupplementaryClassification] = []
     for path in supp_paths:
         file_name = Path(path).name
         try:
@@ -311,13 +319,15 @@ def _analyse_supplementary_files(supp_paths: list[str]) -> list[dict[str, Any]]:
 
         for sheet_name, df in sheets.items():
             try:
-                record = _build_report_record(classify_sheet(df))
+                record = _build_report_record(
+                    classify_sheet(df),
+                    file_name=file_name,
+                    sheet_name=sheet_name,
+                )
             except Exception as exc:
                 records.append(_build_failed_supplementary_record(file_name, sheet_name, exc))
                 continue
 
-            record["file"] = file_name
-            record["sheet"] = sheet_name
             records.append(record)
 
     return records

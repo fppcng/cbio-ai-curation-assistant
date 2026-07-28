@@ -29,12 +29,18 @@ from typing import Any, Iterable
 
 import _repo_bootstrap  # noqa: F401
 from cbio_curation_assistant.command_result import (
+    CommandResult,
     command_error,
     command_result,
     emit_command_result,
     exit_code_for_status,
 )
 from cbio_curation_assistant.workspace import StudyWorkspace
+from cbio_curation_assistant.workflows.mutation_annotation import (
+    GenomeNexusAttemptArtifacts,
+    GenomeNexusResult,
+    MafInspection,
+)
 
 
 DEFAULT_IMAGE = (
@@ -102,7 +108,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def emit(payload: dict[str, Any]) -> None:
+def emit(payload: CommandResult[Any]) -> None:
     """Print exactly one JSON payload for Hermes."""
     emit_command_result(payload)
 
@@ -116,7 +122,7 @@ def data_lines(path: Path) -> Iterable[str]:
             yield line
 
 
-def inspect_maf(path: Path, require_status: bool) -> dict[str, Any]:
+def inspect_maf(path: Path, require_status: bool) -> MafInspection:
     """Validate a tab-delimited MAF and return row/status counts."""
     if not path.is_file():
         raise PipelineError(f"MAF file does not exist: {path}")
@@ -169,13 +175,13 @@ def inspect_maf(path: Path, require_status: bool) -> dict[str, Any]:
     if total == 0:
         raise PipelineError(f"MAF contains no mutation records: {path}")
 
-    return {
-        "columns": fieldnames,
-        "records": total,
-        "successful_annotations": successful,
-        "failed_annotations": failed,
-        "annotation_status_counts": status_counts,
-    }
+    return MafInspection(
+        columns=tuple(fieldnames),
+        records=total,
+        successful_annotations=successful,
+        failed_annotations=failed,
+        annotation_status_counts=status_counts,
+    )
 
 
 def check_docker(image: str) -> None:
@@ -275,28 +281,26 @@ def promote_attempt_outputs(
     shutil.rmtree(backup_dir)
 
 
-def _attempt_error_result(attempt_dir: Path | None) -> dict[str, Any] | None:
+def _attempt_error_result(
+    attempt_dir: Path | None,
+) -> GenomeNexusAttemptArtifacts | None:
     if attempt_dir is None:
         return None
     attempt_paths = canonical_paths(attempt_dir)
-    return {
-        "attempt_directory": str(attempt_dir),
-        "candidate_output_file": (
-            str(attempt_paths["output"])
-            if attempt_paths["output"].is_file()
-            else None
+    return GenomeNexusAttemptArtifacts(
+        attempt_directory=attempt_dir,
+        candidate_output_file=(
+            attempt_paths["output"] if attempt_paths["output"].is_file() else None
         ),
-        "candidate_error_report": (
-            str(attempt_paths["error_report"])
+        candidate_error_report=(
+            attempt_paths["error_report"]
             if attempt_paths["error_report"].is_file()
             else None
         ),
-        "attempt_log_file": (
-            str(attempt_paths["log"])
-            if attempt_paths["log"].is_file()
-            else None
+        attempt_log_file=(
+            attempt_paths["log"] if attempt_paths["log"].is_file() else None
         ),
-    }
+    )
 
 
 def main() -> int:
@@ -402,9 +406,9 @@ def main() -> int:
         output_summary = inspect_maf(attempt_paths["output"], require_status=True)
 
         count_mismatch = (
-            input_summary["records"] != output_summary["records"]
+            input_summary.records != output_summary.records
         )
-        has_failed_annotations = output_summary["failed_annotations"] > 0
+        has_failed_annotations = output_summary.failed_annotations > 0
 
         status = (
             "partial_success"
@@ -419,45 +423,38 @@ def main() -> int:
             )
         if has_failed_annotations:
             warnings.append(
-                f"Genome Nexus reported {output_summary['failed_annotations']} failed annotations."
+                f"Genome Nexus reported {output_summary.failed_annotations} failed annotations."
             )
 
-        result: dict[str, Any] = {
-            "genome_build": args.genome_build,
-            "docker_image": args.image,
-            "workspace": str(workspace),
-            "input_file": str(input_path),
-            "input_records": input_summary["records"],
-            "output_records": output_summary["records"],
-            "successful_annotations": output_summary[
-                "successful_annotations"
-            ],
-            "failed_annotations": output_summary["failed_annotations"],
-            "annotation_status_counts": output_summary[
-                "annotation_status_counts"
-            ],
-            "record_count_mismatch": count_mismatch,
-        }
-
         if status == "partial_success":
-            result.update(
-                {
-                    "attempt_directory": str(attempt_dir),
-                    "candidate_output_file": str(attempt_paths["output"]),
-                    "candidate_error_report": (
-                        str(attempt_paths["error_report"])
+            result = GenomeNexusResult(
+                genome_build=args.genome_build,
+                docker_image=args.image,
+                workspace=workspace,
+                input_file=input_path,
+                input_records=input_summary.records,
+                output_records=output_summary.records,
+                successful_annotations=output_summary.successful_annotations,
+                failed_annotations=output_summary.failed_annotations,
+                annotation_status_counts=output_summary.annotation_status_counts,
+                record_count_mismatch=count_mismatch,
+                attempt=GenomeNexusAttemptArtifacts(
+                    attempt_directory=attempt_dir,
+                    candidate_output_file=attempt_paths["output"],
+                    candidate_error_report=(
+                        attempt_paths["error_report"]
                         if attempt_paths["error_report"].is_file()
                         else None
                     ),
-                    "attempt_log_file": str(attempt_paths["log"]),
-                    "canonical_output_file": (
-                        str(paths["output"]) if paths["output"].is_file() else None
-                    ),
-                    "canonical_outputs_preserved": any(
-                        path.exists()
-                        for path in (paths["output"], paths["error_report"], paths["log"])
-                    ),
-                }
+                    attempt_log_file=attempt_paths["log"],
+                ),
+                canonical_output_file=(
+                    paths["output"] if paths["output"].is_file() else None
+                ),
+                canonical_outputs_preserved=any(
+                    path.exists()
+                    for path in (paths["output"], paths["error_report"], paths["log"])
+                ),
             )
             response = command_result(
                 "genome-nexus",
@@ -473,12 +470,20 @@ def main() -> int:
         promote_attempt_outputs(attempt_paths, paths, attempt_dir)
         shutil.rmtree(attempt_dir)
         attempt_dir = None
-        result.update(
-            {
-                "output_file": str(paths["output"]),
-                "error_report": str(paths["error_report"]),
-                "log_file": str(paths["log"]),
-            }
+        result = GenomeNexusResult(
+            genome_build=args.genome_build,
+            docker_image=args.image,
+            workspace=workspace,
+            input_file=input_path,
+            input_records=input_summary.records,
+            output_records=output_summary.records,
+            successful_annotations=output_summary.successful_annotations,
+            failed_annotations=output_summary.failed_annotations,
+            annotation_status_counts=output_summary.annotation_status_counts,
+            record_count_mismatch=count_mismatch,
+            output_file=paths["output"],
+            error_report=paths["error_report"],
+            log_file=paths["log"],
         )
         response = command_result(
             "genome-nexus",

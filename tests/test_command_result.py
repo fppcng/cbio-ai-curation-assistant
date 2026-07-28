@@ -22,7 +22,7 @@ class CommandResultTest(unittest.TestCase):
         )
 
         self.assertEqual(
-            payload,
+            payload.to_dict(),
             {
                 "schema_version": 1,
                 "command": "example",
@@ -41,16 +41,16 @@ class CommandResultTest(unittest.TestCase):
             warnings=["candidate was not promoted"],
         )
 
-        self.assertEqual(payload["status"], "partial_success")
-        self.assertEqual(payload["warnings"], ["candidate was not promoted"])
-        self.assertIsNone(payload["error"])
+        self.assertEqual(payload.status, "partial_success")
+        self.assertEqual(payload.warnings, ("candidate was not promoted",))
+        self.assertIsNone(payload.error)
 
     def test_error_has_stable_type_and_message_fields(self) -> None:
         payload = command_error("example", RuntimeError("broken"))
 
-        self.assertEqual(payload["status"], "error")
+        self.assertEqual(payload.status, "error")
         self.assertEqual(
-            payload["error"],
+            payload.error.to_dict() if payload.error else None,
             {"type": "RuntimeError", "message": "broken"},
         )
 

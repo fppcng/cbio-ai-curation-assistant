@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from cbio_curation_assistant.command_result import (
+    CommandResult,
     command_error,
     command_result,
     emit_command_result,
@@ -31,6 +32,13 @@ from cbio_curation_assistant.pmc_supplement_fetcher import (
     pmid_to_pmcid,
 )
 from cbio_curation_assistant.workspace import StudyWorkspace, resolve_assistant_home
+from cbio_curation_assistant.workflows.study_download import (
+    ArtifactReuse,
+    DownloadedArtifact,
+    DownloadWorkspacePaths,
+    StudyDownloadResult,
+    SupplementaryArtifacts,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -235,13 +243,13 @@ def _build_file_record(
     path: Path,
     *,
     reused: bool,
-) -> dict[str, Any]:
-    return {
-        "path": str(path.resolve()),
-        "relative_path": workspace.relative_to_root(path),
-        "present": path.is_file(),
-        "reused": reused,
-    }
+) -> DownloadedArtifact:
+    return DownloadedArtifact(
+        path=path.resolve(),
+        relative_path=workspace.relative_to_root(path),
+        present=path.is_file(),
+        reused=reused,
+    )
 
 
 def _build_result_payload(
@@ -253,14 +261,7 @@ def _build_result_payload(
     supplementary_reused: bool,
     article_pdf_reused: bool,
     supplementary_paths: list[Path],
-) -> dict[str, Any]:
-    reused = {
-        "xml": xml_reused,
-        "supplementary": supplementary_reused,
-        "article_pdf": article_pdf_reused,
-    }
-    status = "partial_success" if warnings else "success"
-
+) -> StudyDownloadResult:
     xml_record = _build_file_record(
         workspace,
         workspace.article_xml_path,
@@ -276,52 +277,36 @@ def _build_result_payload(
         for path in supplementary_paths
     ]
 
-    return {
-        "schema_version": DOWNLOAD_RESULT_VERSION,
-        "manifest_version": DOWNLOAD_RESULT_VERSION,
-        "status": status,
-        "success": status == "success",
-        "study_id": workspace.study_id,
-        "study_manifest": workspace.relative_to_root(workspace.manifest_path),
-        "download_manifest": workspace.relative_to_root(workspace.download_manifest_path),
-        "workspace": {
-            "assistant_home": str(workspace.assistant_home),
-            "study_root": str(workspace.root.resolve()),
-            "source_dir": str(workspace.source_dir.resolve()),
-            "study_manifest": str(workspace.manifest_path.resolve()),
-            "download_manifest": str(workspace.download_manifest_path.resolve()),
-        },
-        "managed_paths": workspace.as_manifest_paths(),
-        "resolved_identifier": {
-            "input_identifier": resolved.input_identifier,
-            "identifier_type": resolved.identifier_type,
-            "normalized_identifier": resolved.normalized_identifier,
-            "pmid": resolved.normalized_identifier if resolved.identifier_type == "PMID" else None,
-            "pmcid": resolved.pmcid,
-        },
-        "artifacts": {
-            "xml_path": xml_record["relative_path"],
-            "article_pdf_path": article_pdf_record["relative_path"] if article_pdf_record["present"] else None,
-            "supplementary_paths": [record["relative_path"] for record in supplementary_files],
-            "xml_present": xml_record["present"],
-            "article_pdf_present": article_pdf_record["present"],
-            "supplementary_count": len(supplementary_files),
-        },
-        "artifact_details": {
-            "xml": xml_record,
-            "article_pdf": article_pdf_record,
-            "supplementary": {
-                "directory": str(workspace.supplementary_dir.resolve()),
-                "relative_directory": workspace.relative_to_root(workspace.supplementary_dir),
-                "present": workspace.supplementary_dir.is_dir(),
-                "reused": supplementary_reused,
-                "count": len(supplementary_files),
-                "files": supplementary_files,
-            },
-        },
-        "warnings": warnings,
-        "reused": reused,
-    }
+    return StudyDownloadResult(
+        schema_version=DOWNLOAD_RESULT_VERSION,
+        study_id=workspace.study_id,
+        study_manifest=workspace.relative_to_root(workspace.manifest_path),
+        download_manifest=workspace.relative_to_root(workspace.download_manifest_path),
+        workspace=DownloadWorkspacePaths(
+            assistant_home=workspace.assistant_home,
+            study_root=workspace.root.resolve(),
+            source_dir=workspace.source_dir.resolve(),
+            study_manifest=workspace.manifest_path.resolve(),
+            download_manifest=workspace.download_manifest_path.resolve(),
+        ),
+        managed_paths=workspace.as_manifest_paths(),
+        resolved_identifier=resolved,
+        xml=xml_record,
+        article_pdf=article_pdf_record,
+        supplementary=SupplementaryArtifacts(
+            directory=workspace.supplementary_dir.resolve(),
+            relative_directory=workspace.relative_to_root(workspace.supplementary_dir),
+            present=workspace.supplementary_dir.is_dir(),
+            reused=supplementary_reused,
+            files=tuple(supplementary_files),
+        ),
+        reused=ArtifactReuse(
+            xml=xml_reused,
+            supplementary=supplementary_reused,
+            article_pdf=article_pdf_reused,
+        ),
+        warnings=tuple(warnings),
+    )
 
 
 def run_study_download(
@@ -329,7 +314,7 @@ def run_study_download(
     identifier: str,
     identifier_type: str,
     assistant_home: str | Path | None = None,
-) -> dict[str, Any]:
+) -> StudyDownloadResult:
     resolved = _resolve_download_identifier(identifier, identifier_type)
     workspace = _resolve_study_workspace(
         resolved.pmcid,
@@ -363,26 +348,22 @@ def run_study_download(
         article_pdf_reused=article_pdf_reused,
         supplementary_paths=supplementary_paths,
     )
-    _write_json(manifest_path, result)
+    _write_json(manifest_path, result.to_manifest_dict())
     return result
 
 
-def _emit(payload: dict[str, Any]) -> None:
+def _emit(payload: CommandResult[Any]) -> None:
     emit_command_result(payload)
 
 
-def _response_from_download_result(result: dict[str, Any]) -> dict[str, Any]:
-    status = result["status"]
-    response_result = dict(result)
-    response_result.pop("schema_version", None)
-    response_result.pop("status", None)
-    response_result.pop("success", None)
-    warnings = response_result.pop("warnings", [])
+def _response_from_download_result(
+    result: StudyDownloadResult,
+) -> CommandResult[StudyDownloadResult]:
     return command_result(
         "study-download",
-        status=status,
-        result=response_result,
-        warnings=warnings,
+        status=result.status,
+        result=result,
+        warnings=result.warnings,
     )
 
 
@@ -436,7 +417,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     response = _response_from_download_result(result)
     _emit(response)
-    return exit_code_for_status(response["status"])
+    return exit_code_for_status(response.status)
 
 
 if __name__ == "__main__":

@@ -116,10 +116,10 @@ class SupplementReaderTest(unittest.TestCase):
             records = curator._analyse_supplementary_files(["/tmp/source.xlsx"])
 
         self.assertEqual(len(records), 1)
-        self.assertEqual(records[0]["file"], "source.xlsx")
-        self.assertEqual(records[0]["sheet"], "Clinical")
-        self.assertEqual(records[0]["classification"], "CLINICAL_SAMPLE")
-        self.assertEqual(records[0]["curability"], "YES")
+        self.assertEqual(records[0].file, "source.xlsx")
+        self.assertEqual(records[0].sheet, "Clinical")
+        self.assertEqual(records[0].classification, "CLINICAL_SAMPLE")
+        self.assertEqual(records[0].curability, "YES")
 
     def test_supplement_analysis_turns_reader_errors_into_not_loadable_records(self) -> None:
         with patch.object(
@@ -130,9 +130,10 @@ class SupplementReaderTest(unittest.TestCase):
             records = curator._analyse_supplementary_files(["/tmp/broken.xlsx"])
 
         self.assertEqual(len(records), 1)
-        self.assertEqual(records[0]["classification"], "NOT_LOADABLE")
-        self.assertEqual(records[0]["confidence"], 0)
-        self.assertIn("cannot parse", records[0]["verdict"])
+        self.assertEqual(records[0].classification, "NOT_LOADABLE")
+        self.assertEqual(records[0].confidence, 0)
+        self.assertIn("cannot parse", records[0].verdict)
+        self.assertEqual(records[0].load_error, "cannot parse")
 
 
 if __name__ == "__main__":

@@ -21,6 +21,7 @@ import time
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.parse import unquote, urljoin, urlparse
@@ -58,9 +59,22 @@ class DownloadedSupplement:
 @dataclass(frozen=True)
 class ResolvedStudyIdentifier:
     input_identifier: str
-    identifier_type: str
+    identifier_type: Literal["PMID", "PMCID"]
     normalized_identifier: str
     pmcid: str
+
+    @property
+    def pmid(self) -> str | None:
+        return self.normalized_identifier if self.identifier_type == "PMID" else None
+
+    def to_dict(self) -> dict[str, str | None]:
+        return {
+            "input_identifier": self.input_identifier,
+            "identifier_type": self.identifier_type,
+            "normalized_identifier": self.normalized_identifier,
+            "pmid": self.pmid,
+            "pmcid": self.pmcid,
+        }
 
 
 @dataclass(frozen=True)

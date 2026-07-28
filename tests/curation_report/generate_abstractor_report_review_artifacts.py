@@ -82,11 +82,15 @@ def main() -> int:
         "study_id": study_id,
         "mode": mode,
         "artifact_dir": str(artifact_dir.resolve()),
-        "paper_source_type": result["inputs"]["paper_source_type"],
-        "warnings": result["warnings"],
-        "llm": result["llm"],
-        "pdf_path": result["pdf_path"],
-        "report_json_path": result["report_json_path"],
+        "paper_source_type": result.inputs.paper_source.kind,
+        "warnings": list(result.warnings),
+        "llm": result.llm.to_dict(),
+        "pdf_path": str(result.outputs.pdf) if result.outputs.pdf else None,
+        "report_json_path": (
+            str(result.outputs.curation_report_json)
+            if result.outputs.curation_report_json
+            else None
+        ),
     }
     if mode == "deterministic":
         payload["expected_no_llm_warning"] = NO_LLM_WARNING

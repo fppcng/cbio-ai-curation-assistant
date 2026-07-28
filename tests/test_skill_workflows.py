@@ -89,11 +89,10 @@ class StudyDownloadWorkflowTest(unittest.TestCase):
                 workspace.download_manifest_path.read_text(encoding="utf-8")
             )
 
-        self.assertEqual(result["status"], "success")
-        self.assertTrue(result["success"])
-        self.assertEqual(result["study_id"], "pmc123")
-        self.assertEqual(result["artifacts"]["supplementary_count"], 1)
-        self.assertEqual(persisted, result)
+        self.assertEqual(result.status, "success")
+        self.assertEqual(result.study_id, "pmc123")
+        self.assertEqual(len(result.supplementary.files), 1)
+        self.assertEqual(persisted, result.to_manifest_dict())
 
     def test_main_renders_pmc_errors_as_json(self) -> None:
         error = self.workflow.PMCRequestError(
@@ -126,13 +125,11 @@ class StudyDownloadWorkflowTest(unittest.TestCase):
         self.assertIn("HTTP 404", payload["error"]["message"])
 
     def test_main_returns_three_for_partial_success(self) -> None:
-        download_result = {
-            "schema_version": 1,
-            "status": "partial_success",
-            "success": False,
-            "study_id": "pmc123",
-            "warnings": ["article PDF was unavailable"],
-        }
+        download_result = SimpleNamespace(
+            status="partial_success",
+            warnings=("article PDF was unavailable",),
+            to_dict=lambda: {"study_id": "pmc123"},
+        )
         stdout = io.StringIO()
         args = argparse.Namespace(
             identifier="PMC123",
@@ -238,11 +235,11 @@ class CurationReportWorkflowTest(unittest.TestCase):
 
             persisted = json.loads(output_json.read_text(encoding="utf-8"))
 
-        self.assertEqual(result["inputs"]["paper_source_type"], "xml")
-        self.assertEqual(result["summary"]["files_analysed"], 1)
-        self.assertEqual(result["summary"]["high_priority"], 1)
+        self.assertEqual(result.inputs.paper_source.kind, "xml")
+        self.assertEqual(result.summary.files_analysed, 1)
+        self.assertEqual(result.summary.high_priority, 1)
         self.assertEqual(persisted, {"report_title": "Fixture"})
-        self.assertTrue(Path(result["pdf_path"]).is_absolute())
+        self.assertTrue(result.outputs.pdf.is_absolute())
 
     def test_report_main_returns_structured_error_output(self) -> None:
         stdout = io.StringIO()
@@ -304,11 +301,11 @@ class GenomeNexusWorkflowTest(unittest.TestCase):
             )
             summary = self.workflow.inspect_maf(path, require_status=True)
 
-        self.assertEqual(summary["records"], 2)
-        self.assertEqual(summary["successful_annotations"], 1)
-        self.assertEqual(summary["failed_annotations"], 1)
+        self.assertEqual(summary.records, 2)
+        self.assertEqual(summary.successful_annotations, 1)
+        self.assertEqual(summary.failed_annotations, 1)
         self.assertEqual(
-            summary["annotation_status_counts"],
+            summary.annotation_status_counts,
             {"FAILED": 1, "SUCCESS": 1},
         )
 
