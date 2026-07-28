@@ -57,6 +57,14 @@ class InstalledWheelSmokeTest(unittest.TestCase):
             with zipfile.ZipFile(wheel) as archive:
                 names = archive.namelist()
             self.assertIn("cbio_curation_assistant/cli.py", names)
+            self.assertIn(
+                "cbio_curation_assistant/resources/oncotree/oncotree_snapshot.tsv",
+                names,
+            )
+            self.assertIn(
+                "cbio_curation_assistant/resources/oncotree/provenance.json",
+                names,
+            )
             self.assertFalse(
                 any(name.startswith("hermes_skills/") for name in names),
                 "Hermes skills are currently excluded from the wheel",
@@ -122,6 +130,30 @@ class InstalledWheelSmokeTest(unittest.TestCase):
             payload = json.loads(completed.stdout)
             self.assertEqual(payload["status"], "success")
             self.assertEqual(payload["result"]["study_id"], "pmc123")
+
+            oncotree = subprocess.run(
+                [
+                    str(command),
+                    "oncotree-search",
+                    "--query",
+                    "LUAD",
+                    "--limit",
+                    "1",
+                    "--json",
+                ],
+                env=environment,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            self.assertEqual(oncotree.returncode, 0, oncotree.stderr)
+            oncotree_payload = json.loads(oncotree.stdout)
+            self.assertEqual(oncotree_payload["status"], "success")
+            self.assertEqual(
+                oncotree_payload["result"]["query_results"][0]["oncotree_code"],
+                "LUAD",
+            )
 
 
 if __name__ == "__main__":

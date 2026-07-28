@@ -1,0 +1,1 @@
+"""Packaged OncoTree hierarchy resources."""

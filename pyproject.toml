@@ -34,3 +34,6 @@ exclude = [
     "studies*",
     "tests*",
 ]
+
+[tool.setuptools.package-data]
+"cbio_curation_assistant.resources.oncotree" = ["*.json", "*.tsv"]

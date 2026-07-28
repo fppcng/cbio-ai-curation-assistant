@@ -15,6 +15,7 @@ from cbio_curation_assistant.command_result import (
     command_result,
     emit_command_result,
 )
+from cbio_curation_assistant.oncotree_cli import run_oncotree_search_command
 from cbio_curation_assistant.workspace import (
     ENV_VAR_NAME,
     StudyWorkspace,
@@ -27,10 +28,10 @@ from cbio_curation_assistant.workspace import (
 _SCRIPT_COMMANDS: dict[str, str] = {
     "study-download": "hermes_skills/abstractor-study-download/scripts/abstractor_study_download.py",
     "curation-report": "hermes_skills/abstractor-curation-report-generation/scripts/abstractor_report_generator.py",
-    "oncotree-search": "hermes_skills/curator-oncotree-consultation/scripts/search_oncotree_code.py",
     "clinical-dictionary": "hermes_skills/curator-clinical-files-creation/scripts/consult_clinical_dictionary.py",
     "genome-nexus": "hermes_skills/curator-mutation-data-file-creation/scripts/run_genome_nexus.py",
 }
+_DIRECT_COMMANDS = ("oncotree-search", "validate-study", "workspace")
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -41,7 +42,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "command",
         nargs="?",
-        choices=sorted((*_SCRIPT_COMMANDS, "validate-study", "workspace")),
+        choices=sorted((*_SCRIPT_COMMANDS, *_DIRECT_COMMANDS)),
         help="Workflow command to run.",
     )
     parser.add_argument(
@@ -201,6 +202,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _run_validate_study(args.args)
         if args.command == "workspace":
             return _run_workspace(args.args)
+        if args.command == "oncotree-search":
+            return run_oncotree_search_command(args.args)
         return _run_script(args.command, args.args)
     except WorkspaceError as exc:
         emit_command_result(command_error(args.command, exc))

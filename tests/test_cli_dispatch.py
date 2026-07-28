@@ -4,7 +4,6 @@ import contextlib
 import io
 import json
 import unittest
-from pathlib import Path
 from unittest.mock import patch
 
 from cbio_curation_assistant import cli
@@ -59,18 +58,17 @@ class CliDispatchTest(unittest.TestCase):
             {"type": "RuntimeError", "message": "broken"},
         )
 
-    def test_run_script_resolves_the_configured_skill_path(self) -> None:
-        assistant_home = Path("/fixture/repository")
-        expected = assistant_home / cli._SCRIPT_COMMANDS["oncotree-search"]
-        with (
-            patch.object(cli, "_assistant_home", return_value=assistant_home),
-            patch.object(Path, "is_file", return_value=True),
-            patch.object(cli, "_run_external_script", return_value=0) as run,
-        ):
-            code = cli._run_script("oncotree-search", ["--json"])
+    def test_oncotree_search_uses_direct_package_dispatch(self) -> None:
+        self.assertNotIn("oncotree-search", cli._SCRIPT_COMMANDS)
+        with patch.object(
+            cli,
+            "run_oncotree_search_command",
+            return_value=7,
+        ) as run:
+            code = cli.main(["oncotree-search", "--query", "LUAD", "--json"])
 
-        self.assertEqual(code, 0)
-        run.assert_called_once_with(expected, ["--json"])
+        self.assertEqual(code, 7)
+        run.assert_called_once_with(["--query", "LUAD", "--json"])
 
 
 if __name__ == "__main__":

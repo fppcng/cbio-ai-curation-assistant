@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "dataset": "OncoTree hierarchy snapshot",
+  "filename": "oncotree_snapshot.tsv",
+  "source": "OncoTree by cBioPortal; the exact upstream export URL was not recorded",
+  "upstream_project_url": "https://github.com/cBioPortal/oncotree",
+  "license": "CC-BY-4.0",
+  "upstream_release": null,
+  "upstream_retrieved_at": null,
+  "repository_introduced_at": "2026-06-25",
+  "sha256": "d1902387241d6f965e27e6008aaab9cee9e663883922adf5d8421579db6f1d82",
+  "transformations": [
+    "Renamed from oncotree_latest_table.txt to oncotree_snapshot.tsv without modifying its bytes"
+  ],
+  "provenance_notes": "The original upstream URL, release, and retrieval date were not recorded in repository history. The snapshot is intentionally not described as latest."
+}
