@@ -1,0 +1,689 @@
+{
+  "report_title": "cBioAbstractor Curation Report",
+  "study_title": "Genomic and Transcriptomic Profiling of Combined Hepatocellular and Intrahepatic Cholangiocarcinoma Reveals Distinct Molecular Subtypes",
+  "citation": "Cancer cell 2019 | DOI: 10.1016/j.ccell.2019.04.007 | PMID: 31130341",
+  "study_overview": {
+    "study_title": "Genomic and Transcriptomic Profiling of Combined Hepatocellular and Intrahepatic Cholangiocarcinoma Reveals Distinct Molecular Subtypes",
+    "study_id_suggestion": "chc_icc_xue_2019",
+    "cancer_type": "chc_icc",
+    "cancer_type_full": "Combined Hepatocellular and Intrahepatic Cholangiocarcinoma",
+    "num_samples": "173",
+    "num_patients": "133",
+    "reference_genome": "hg19",
+    "sequencing_types": [
+      "WES",
+      "WGS",
+      "WTS",
+      "SNS"
+    ],
+    "pmid": "31130341",
+    "doi": "10.1016/j.ccell.2019.04.007",
+    "first_author_surname": "Xue",
+    "year": "2019",
+    "journal": "Cancer cell",
+    "publication": "Cancer cell 2019",
+    "description": "SUMMARY We performed genomic and transcriptomic sequencing of 133 combined hepatocellular and intrahepatic cholangiocarcinoma (cHCC-ICC) cases, including separate, combined, and mixed subtypes.",
+    "meta_description": "SUMMARY We performed genomic and transcriptomic sequencing of 133 combined hepatocellular and intrahepatic cholangiocarcinoma (cHCC-ICC) cases, including separate, combined, and mixed subtypes.",
+    "primary_site": "Liver",
+    "cohort_description": "Pan-Asia multi-center cohort of 133 sequenced cHCC-ICC patients, including separate, combined, and mixed histologic subtypes, with matched normal controls and multi-omic profiling.",
+    "data_repositories": [],
+    "corresponding_authors": "* Correspondence: [redacted-email] (H.N.), [redacted-email] (M.-S.Z.), [redacted-email] (F.B.), [redacted-email]",
+    "key_findings": [
+      "Combined and mixed cHCC-ICC are distinct molecular subtypes, with combined tumors more ICC-like and mixed tumors more HCC-like.",
+      "TP53, AXIN1, RB1, PTEN, ARID2, and BRD7 were significantly mutated, while CTNNB1 and KRAS mutations were notably scarce compared with HCC and ICC.",
+      "Separate-type cHCC-ICC showed both monoclonal and multiclonal origins, whereas combined and mixed types showed predominantly monoclonal origin.",
+      "Single-nucleus sequencing of a mixed-type tumor confirmed monoclonal origin with subclonal diversification.",
+      "Nestin expression was significantly elevated in cHCC-ICC and may serve as a diagnostic and prognostic biomarker."
+    ]
+  },
+  "supplementary_file_analysis": {
+    "high_priority": 3,
+    "medium_priority": 3,
+    "needs_manual_intervention": 15,
+    "file_breakdown": [
+      {
+        "file": "NIHMS1716322-supplement-Supple_figs_S1-S7.pdf",
+        "sheet": "PDF (aggregated 1 sections)",
+        "cbioportal_format": "Needs manual intervention",
+        "confidence_percent": 0,
+        "loadable": "Needs manual intervention",
+        "priority": "N/A",
+        "columns_present": [],
+        "columns_missing": [
+          "hugo_symbol"
+        ]
+      },
+      {
+        "file": "NIHMS1716322-supplement-Supple_table_S1.xlsx",
+        "sheet": "Clinicopathologic features ",
+        "cbioportal_format": "data_clinical_patient.txt",
+        "confidence_percent": 78,
+        "loadable": "Yes",
+        "priority": "HIGH",
+        "columns_present": [
+          "patient_id"
+        ],
+        "columns_missing": []
+      },
+      {
+        "file": "NIHMS1716322-supplement-Supple_table_S1.xlsx",
+        "sheet": "Cohort summary",
+        "cbioportal_format": "Needs manual intervention",
+        "confidence_percent": 0,
+        "loadable": "Needs manual intervention",
+        "priority": "N/A",
+        "columns_present": [],
+        "columns_missing": [
+          "hugo_symbol"
+        ]
+      },
+      {
+        "file": "NIHMS1716322-supplement-Supple_table_S1.xlsx",
+        "sheet": "Sample information",
+        "cbioportal_format": "data_clinical_patient.txt",
+        "confidence_percent": 70,
+        "loadable": "Yes",
+        "priority": "HIGH",
+        "columns_present": [
+          "patient_id"
+        ],
+        "columns_missing": []
+      },
+      {
+        "file": "NIHMS1716322-supplement-Supple_table_S2.xlsx",
+        "sheet": "Mutations_WES",
+        "cbioportal_format": "data_segments.txt",
+        "confidence_percent": 53,
+        "loadable": "Partly curatable",
+        "priority": "MEDIUM",
+        "columns_present": [
+          "id",
+          "chrom"
+        ],
+        "columns_missing": [
+          "loc.start",
+          "loc.end",
+          "num.mark",
+          "seg.mean"
+        ]
+      },
+      {
+        "file": "NIHMS1716322-supplement-Supple_table_S2.xlsx",
+        "sheet": "Mutations in each sample",
+        "cbioportal_format": "Needs manual intervention",
+        "confidence_percent": 0,
+        "loadable": "Needs manual intervention",
+        "priority": "N/A",
+        "columns_present": [
+          "id"
+        ],
+        "columns_missing": [
+          "chrom",
+          "loc.start",
+          "loc.end",
+          "num.mark",
+          "seg.mean"
+        ]
+      },
+      {
+        "file": "NIHMS1716322-supplement-Supple_table_S2.xlsx",
+        "sheet": "Potential driver genes",
+        "cbioportal_format": "Needs manual intervention",
+        "confidence_percent": 0,
+        "loadable": "Needs manual intervention",
+        "priority": "N/A",
+        "columns_present": [],
+        "columns_missing": [
+          "hugo_symbol"
+        ]
+      },
+      {
+        "file": "NIHMS1716322-supplement-Supple_table_S2.xlsx",
+        "sheet": "Mutations_WGS",
+        "cbioportal_format": "Needs manual intervention",
+        "confidence_percent": 0,
+        "loadable": "Needs manual intervention",
+        "priority": "N/A",
+        "columns_present": [
+          "chrom"
+        ],
+        "columns_missing": [
+          "id",
+          "loc.start",
+          "loc.end",
+          "num.mark",
+          "seg.mean"
+        ]
+      },
+      {
+        "file": "NIHMS1716322-supplement-Supple_table_S2.xlsx",
+        "sheet": "SV_WGS",
+        "cbioportal_format": "Needs manual intervention",
+        "confidence_percent": 0,
+        "loadable": "Needs manual intervention",
+        "priority": "N/A",
+        "columns_present": [
+          "sample_id"
+        ],
+        "columns_missing": [
+          "sv_status"
+        ]
+      },
+      {
+        "file": "NIHMS1716322-supplement-Supple_table_S2.xlsx",
+        "sheet": "Gene fusions_RNA-seq",
+        "cbioportal_format": "Needs manual intervention",
+        "confidence_percent": 0,
+        "loadable": "Needs manual intervention",
+        "priority": "N/A",
+        "columns_present": [
+          "sample_id"
+        ],
+        "columns_missing": [
+          "sv_status"
+        ]
+      },
+      {
+        "file": "NIHMS1716322-supplement-Supple_table_S2.xlsx",
+        "sheet": "HBV references",
+        "cbioportal_format": "Needs manual intervention",
+        "confidence_percent": 0,
+        "loadable": "Needs manual intervention",
+        "priority": "N/A",
+        "columns_present": [],
+        "columns_missing": [
+          "hugo_symbol"
+        ]
+      },
+      {
+        "file": "NIHMS1716322-supplement-Supple_table_S2.xlsx",
+        "sheet": "HBV integrations_WES",
+        "cbioportal_format": "Needs manual intervention",
+        "confidence_percent": 0,
+        "loadable": "Needs manual intervention",
+        "priority": "N/A",
+        "columns_present": [
+          "id"
+        ],
+        "columns_missing": [
+          "chrom",
+          "loc.start",
+          "loc.end",
+          "num.mark",
+          "seg.mean"
+        ]
+      },
+      {
+        "file": "NIHMS1716322-supplement-Supple_table_S2.xlsx",
+        "sheet": "HBV integrations_2",
+        "cbioportal_format": "Needs manual intervention",
+        "confidence_percent": 0,
+        "loadable": "Needs manual intervention",
+        "priority": "N/A",
+        "columns_present": [
+          "sample_id"
+        ],
+        "columns_missing": [
+          "sv_status"
+        ]
+      },
+      {
+        "file": "NIHMS1716322-supplement-Supple_table_S2.xlsx",
+        "sheet": "GISTIC",
+        "cbioportal_format": "data_gistic_genes_amp.txt / data_gistic_genes_del.txt",
+        "confidence_percent": 70,
+        "loadable": "Partly curatable",
+        "priority": "MEDIUM",
+        "columns_present": [
+          "cytoband",
+          "q value"
+        ],
+        "columns_missing": []
+      },
+      {
+        "file": "NIHMS1716322-supplement-Supple_table_S2.xlsx",
+        "sheet": "Mutational signatures",
+        "cbioportal_format": "Needs manual intervention",
+        "confidence_percent": 0,
+        "loadable": "Needs manual intervention",
+        "priority": "N/A",
+        "columns_present": [],
+        "columns_missing": [
+          "hugo_symbol"
+        ]
+      },
+      {
+        "file": "NIHMS1716322-supplement-Supple_table_S3.xlsx",
+        "sheet": "Table S3",
+        "cbioportal_format": "Needs manual intervention",
+        "confidence_percent": 0,
+        "loadable": "Needs manual intervention",
+        "priority": "N/A",
+        "columns_present": [],
+        "columns_missing": [
+          "hugo_symbol"
+        ]
+      },
+      {
+        "file": "NIHMS1716322-supplement-Supple_table_S4.xlsx",
+        "sheet": "Summary of samples",
+        "cbioportal_format": "Needs manual intervention",
+        "confidence_percent": 0,
+        "loadable": "Needs manual intervention",
+        "priority": "N/A",
+        "columns_present": [
+          "sample_id"
+        ],
+        "columns_missing": [
+          "sv_status"
+        ]
+      },
+      {
+        "file": "NIHMS1716322-supplement-Supple_table_S4.xlsx",
+        "sheet": "GSEA P1vsP2",
+        "cbioportal_format": "Needs manual intervention",
+        "confidence_percent": 0,
+        "loadable": "Needs manual intervention",
+        "priority": "N/A",
+        "columns_present": [
+          "p"
+        ],
+        "columns_missing": [
+          "gene",
+          "q"
+        ]
+      },
+      {
+        "file": "NIHMS1716322-supplement-Supple_table_S5.xlsx",
+        "sheet": "Table S5",
+        "cbioportal_format": "data_CNA.txt",
+        "confidence_percent": 48,
+        "loadable": "Partly curatable",
+        "priority": "MEDIUM",
+        "columns_present": [
+          "hugo_symbol"
+        ],
+        "columns_missing": []
+      },
+      {
+        "file": "NIHMS1716322-supplement-Supple_table_S6.xlsx",
+        "sheet": "Table S6",
+        "cbioportal_format": "data_clinical_patient.txt",
+        "confidence_percent": 60,
+        "loadable": "Yes",
+        "priority": "HIGH",
+        "columns_present": [
+          "patient_id"
+        ],
+        "columns_missing": []
+      },
+      {
+        "file": "NIHMS1716322-supplement-Supple_table_S7.xlsx",
+        "sheet": "Table S7",
+        "cbioportal_format": "Needs manual intervention",
+        "confidence_percent": 0,
+        "loadable": "Needs manual intervention",
+        "priority": "N/A",
+        "columns_present": [],
+        "columns_missing": [
+          "hugo_symbol"
+        ]
+      }
+    ]
+  },
+  "per_sheet_classification_detail": [
+    {
+      "file": "NIHMS1716322-supplement-Supple_figs_S1-S7.pdf",
+      "sheet": "PDF (aggregated 1 sections)",
+      "format": "Needs manual intervention",
+      "confidence_percent": 0,
+      "loadable": "Needs manual intervention",
+      "priority": "N/A",
+      "assessment": "NOT LOADABLE — best candidate: DISCRETE_CNA @ 0%",
+      "required_columns_found": [],
+      "required_columns_missing": [
+        "hugo_symbol"
+      ],
+      "optional_columns_found": []
+    },
+    {
+      "file": "NIHMS1716322-supplement-Supple_table_S1.xlsx",
+      "sheet": "Clinicopathologic features ",
+      "format": "data_clinical_patient.txt",
+      "confidence_percent": 78,
+      "loadable": "Yes",
+      "priority": "HIGH",
+      "assessment": "CLINICAL_PATIENT  (78% confidence)",
+      "required_columns_found": [
+        "patient_id"
+      ],
+      "required_columns_missing": [],
+      "optional_columns_found": [
+        "sex",
+        "gender",
+        "age"
+      ]
+    },
+    {
+      "file": "NIHMS1716322-supplement-Supple_table_S1.xlsx",
+      "sheet": "Cohort summary",
+      "format": "Needs manual intervention",
+      "confidence_percent": 0,
+      "loadable": "Needs manual intervention",
+      "priority": "N/A",
+      "assessment": "NOT LOADABLE — best candidate: DISCRETE_CNA @ 0%",
+      "required_columns_found": [],
+      "required_columns_missing": [
+        "hugo_symbol"
+      ],
+      "optional_columns_found": []
+    },
+    {
+      "file": "NIHMS1716322-supplement-Supple_table_S1.xlsx",
+      "sheet": "Sample information",
+      "format": "data_clinical_patient.txt",
+      "confidence_percent": 70,
+      "loadable": "Yes",
+      "priority": "HIGH",
+      "assessment": "CLINICAL_PATIENT  (70% confidence)  |  Alt: CLINICAL_SAMPLE @ 70%",
+      "required_columns_found": [
+        "patient_id"
+      ],
+      "required_columns_missing": [],
+      "optional_columns_found": []
+    },
+    {
+      "file": "NIHMS1716322-supplement-Supple_table_S2.xlsx",
+      "sheet": "Mutations_WES",
+      "format": "data_segments.txt",
+      "confidence_percent": 53,
+      "loadable": "Partly curatable",
+      "priority": "MEDIUM",
+      "assessment": "SEGMENTED  (53% confidence)  |  Missing required: loc.start, loc.end, num.mark, seg.mean  |  Alt: DISCRETE_CNA @ 48%",
+      "required_columns_found": [
+        "id",
+        "chrom"
+      ],
+      "required_columns_missing": [
+        "loc.start",
+        "loc.end",
+        "num.mark",
+        "seg.mean"
+      ],
+      "optional_columns_found": [
+        "sample"
+      ]
+    },
+    {
+      "file": "NIHMS1716322-supplement-Supple_table_S2.xlsx",
+      "sheet": "Mutations in each sample",
+      "format": "Needs manual intervention",
+      "confidence_percent": 0,
+      "loadable": "Needs manual intervention",
+      "priority": "N/A",
+      "assessment": "NOT LOADABLE — best candidate: SEGMENTED @ 32%",
+      "required_columns_found": [
+        "id"
+      ],
+      "required_columns_missing": [
+        "chrom",
+        "loc.start",
+        "loc.end",
+        "num.mark",
+        "seg.mean"
+      ],
+      "optional_columns_found": [
+        "sample"
+      ]
+    },
+    {
+      "file": "NIHMS1716322-supplement-Supple_table_S2.xlsx",
+      "sheet": "Potential driver genes",
+      "format": "Needs manual intervention",
+      "confidence_percent": 0,
+      "loadable": "Needs manual intervention",
+      "priority": "N/A",
+      "assessment": "NOT LOADABLE — best candidate: DISCRETE_CNA @ 0%",
+      "required_columns_found": [],
+      "required_columns_missing": [
+        "hugo_symbol"
+      ],
+      "optional_columns_found": []
+    },
+    {
+      "file": "NIHMS1716322-supplement-Supple_table_S2.xlsx",
+      "sheet": "Mutations_WGS",
+      "format": "Needs manual intervention",
+      "confidence_percent": 0,
+      "loadable": "Needs manual intervention",
+      "priority": "N/A",
+      "assessment": "NOT LOADABLE — best candidate: SEGMENTED @ 12%",
+      "required_columns_found": [
+        "chrom"
+      ],
+      "required_columns_missing": [
+        "id",
+        "loc.start",
+        "loc.end",
+        "num.mark",
+        "seg.mean"
+      ],
+      "optional_columns_found": []
+    },
+    {
+      "file": "NIHMS1716322-supplement-Supple_table_S2.xlsx",
+      "sheet": "SV_WGS",
+      "format": "Needs manual intervention",
+      "confidence_percent": 0,
+      "loadable": "Needs manual intervention",
+      "priority": "N/A",
+      "assessment": "NOT LOADABLE — best candidate: STRUCTURAL_VARIANT @ 25%",
+      "required_columns_found": [
+        "sample_id"
+      ],
+      "required_columns_missing": [
+        "sv_status"
+      ],
+      "optional_columns_found": []
+    },
+    {
+      "file": "NIHMS1716322-supplement-Supple_table_S2.xlsx",
+      "sheet": "Gene fusions_RNA-seq",
+      "format": "Needs manual intervention",
+      "confidence_percent": 0,
+      "loadable": "Needs manual intervention",
+      "priority": "N/A",
+      "assessment": "NOT LOADABLE — best candidate: STRUCTURAL_VARIANT @ 35%",
+      "required_columns_found": [
+        "sample_id"
+      ],
+      "required_columns_missing": [
+        "sv_status"
+      ],
+      "optional_columns_found": []
+    },
+    {
+      "file": "NIHMS1716322-supplement-Supple_table_S2.xlsx",
+      "sheet": "HBV references",
+      "format": "Needs manual intervention",
+      "confidence_percent": 0,
+      "loadable": "Needs manual intervention",
+      "priority": "N/A",
+      "assessment": "NOT LOADABLE — best candidate: DISCRETE_CNA @ 0%",
+      "required_columns_found": [],
+      "required_columns_missing": [
+        "hugo_symbol"
+      ],
+      "optional_columns_found": []
+    },
+    {
+      "file": "NIHMS1716322-supplement-Supple_table_S2.xlsx",
+      "sheet": "HBV integrations_WES",
+      "format": "Needs manual intervention",
+      "confidence_percent": 0,
+      "loadable": "Needs manual intervention",
+      "priority": "N/A",
+      "assessment": "NOT LOADABLE — best candidate: SEGMENTED @ 32%",
+      "required_columns_found": [
+        "id"
+      ],
+      "required_columns_missing": [
+        "chrom",
+        "loc.start",
+        "loc.end",
+        "num.mark",
+        "seg.mean"
+      ],
+      "optional_columns_found": [
+        "sample"
+      ]
+    },
+    {
+      "file": "NIHMS1716322-supplement-Supple_table_S2.xlsx",
+      "sheet": "HBV integrations_2",
+      "format": "Needs manual intervention",
+      "confidence_percent": 0,
+      "loadable": "Needs manual intervention",
+      "priority": "N/A",
+      "assessment": "NOT LOADABLE — best candidate: STRUCTURAL_VARIANT @ 35%",
+      "required_columns_found": [
+        "sample_id"
+      ],
+      "required_columns_missing": [
+        "sv_status"
+      ],
+      "optional_columns_found": []
+    },
+    {
+      "file": "NIHMS1716322-supplement-Supple_table_S2.xlsx",
+      "sheet": "GISTIC",
+      "format": "data_gistic_genes_amp.txt / data_gistic_genes_del.txt",
+      "confidence_percent": 70,
+      "loadable": "Partly curatable",
+      "priority": "MEDIUM",
+      "assessment": "GISTIC  (70% confidence)",
+      "required_columns_found": [
+        "cytoband",
+        "q value"
+      ],
+      "required_columns_missing": [],
+      "optional_columns_found": []
+    },
+    {
+      "file": "NIHMS1716322-supplement-Supple_table_S2.xlsx",
+      "sheet": "Mutational signatures",
+      "format": "Needs manual intervention",
+      "confidence_percent": 0,
+      "loadable": "Needs manual intervention",
+      "priority": "N/A",
+      "assessment": "NOT LOADABLE — best candidate: DISCRETE_CNA @ 0%",
+      "required_columns_found": [],
+      "required_columns_missing": [
+        "hugo_symbol"
+      ],
+      "optional_columns_found": []
+    },
+    {
+      "file": "NIHMS1716322-supplement-Supple_table_S3.xlsx",
+      "sheet": "Table S3",
+      "format": "Needs manual intervention",
+      "confidence_percent": 0,
+      "loadable": "Needs manual intervention",
+      "priority": "N/A",
+      "assessment": "NOT LOADABLE — best candidate: DISCRETE_CNA @ 0%",
+      "required_columns_found": [],
+      "required_columns_missing": [
+        "hugo_symbol"
+      ],
+      "optional_columns_found": []
+    },
+    {
+      "file": "NIHMS1716322-supplement-Supple_table_S4.xlsx",
+      "sheet": "Summary of samples",
+      "format": "Needs manual intervention",
+      "confidence_percent": 0,
+      "loadable": "Needs manual intervention",
+      "priority": "N/A",
+      "assessment": "NOT LOADABLE — best candidate: STRUCTURAL_VARIANT @ 35%",
+      "required_columns_found": [
+        "sample_id"
+      ],
+      "required_columns_missing": [
+        "sv_status"
+      ],
+      "optional_columns_found": []
+    },
+    {
+      "file": "NIHMS1716322-supplement-Supple_table_S4.xlsx",
+      "sheet": "GSEA P1vsP2",
+      "format": "Needs manual intervention",
+      "confidence_percent": 0,
+      "loadable": "Needs manual intervention",
+      "priority": "N/A",
+      "assessment": "NOT LOADABLE — best candidate: MUTSIG @ 16%",
+      "required_columns_found": [
+        "p"
+      ],
+      "required_columns_missing": [
+        "gene",
+        "q"
+      ],
+      "optional_columns_found": [
+        "rank"
+      ]
+    },
+    {
+      "file": "NIHMS1716322-supplement-Supple_table_S5.xlsx",
+      "sheet": "Table S5",
+      "format": "data_CNA.txt",
+      "confidence_percent": 48,
+      "loadable": "Partly curatable",
+      "priority": "MEDIUM",
+      "assessment": "DISCRETE_CNA  (48% confidence)  |  Alt: CONTINUOUS_CNA @ 45%",
+      "required_columns_found": [
+        "hugo_symbol"
+      ],
+      "required_columns_missing": [],
+      "optional_columns_found": [
+        "hugo_symbol"
+      ]
+    },
+    {
+      "file": "NIHMS1716322-supplement-Supple_table_S6.xlsx",
+      "sheet": "Table S6",
+      "format": "data_clinical_patient.txt",
+      "confidence_percent": 60,
+      "loadable": "Yes",
+      "priority": "HIGH",
+      "assessment": "CLINICAL_PATIENT  (60% confidence)",
+      "required_columns_found": [
+        "patient_id"
+      ],
+      "required_columns_missing": [],
+      "optional_columns_found": []
+    },
+    {
+      "file": "NIHMS1716322-supplement-Supple_table_S7.xlsx",
+      "sheet": "Table S7",
+      "format": "Needs manual intervention",
+      "confidence_percent": 0,
+      "loadable": "Needs manual intervention",
+      "priority": "N/A",
+      "assessment": "NOT LOADABLE — best candidate: DISCRETE_CNA @ 0%",
+      "required_columns_found": [],
+      "required_columns_missing": [
+        "hugo_symbol"
+      ],
+      "optional_columns_found": []
+    }
+  ],
+  "suggested_study_metadata": {
+    "cancer_study_identifier": "chc_icc_xue_2019",
+    "name": "Genomic and Transcriptomic Profiling of Combined Hepatocellular and Intrahepatic Cholangiocarcinoma Reveals Distinct Molecular Subtypes",
+    "description": "SUMMARY We performed genomic and transcriptomic sequencing of 133 combined hepatocellular and intrahepatic cholangiocarcinoma (cHCC-ICC) cases, including separate, combined, and mixed subtypes.",
+    "cancer_type": "chc_icc",
+    "short_name": "chc_icc_xue_2019",
+    "pmid": "31130341",
+    "groups": "PUBLIC"
+  }
+}

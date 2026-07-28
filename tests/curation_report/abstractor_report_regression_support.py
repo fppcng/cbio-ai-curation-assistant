@@ -20,7 +20,13 @@ import cbio_curation_assistant.spec_match as spec_match
 
 STUDY_ID = "pmc8317046"
 STUDY_ROOT = REPO_ROOT / "studies" / STUDY_ID
-GOLD_REPORT_PATH = STUDY_ROOT / "reports" / "chc_icc_xue_2019_abstractor_report.json"
+GOLD_REPORT_PATH = (
+    REPO_ROOT
+    / "tests"
+    / "curation_report"
+    / "fixtures"
+    / "chc_icc_xue_2019_abstractor_report.json"
+)
 GENERATOR_PATH = (
     REPO_ROOT
     / "hermes_skills"
