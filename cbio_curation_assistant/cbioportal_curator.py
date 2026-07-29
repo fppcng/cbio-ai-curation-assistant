@@ -22,8 +22,7 @@ from cbio_curation_assistant.cbioportal.classification import (
     ClassificationResult,
     classify_sheet,
 )
-from cbio_curation_assistant.config import LLMConfig
-from cbio_curation_assistant.llm_client import call_llm_with_retry, parse_llm_json
+from cbio_curation_assistant.llm import LLMConfig, complete_text, parse_llm_json
 from cbio_curation_assistant.pdf_metadata_regex import (
     extract_metadata_regex as _extract_metadata_regex,
 )
@@ -91,7 +90,7 @@ def extract_pdf_text(pdf_path: str, max_pages: int = 12) -> str:
 
 def _extract_metadata_llm(pdf_text: str, llm_config: LLMConfig, temperature: float) -> dict[str, Any]:
     _ = temperature
-    raw = call_llm_with_retry(
+    raw = complete_text(
         config=llm_config,
         system=SYSTEM_PROMPT_CURATOR,
         user_content=pdf_text[:12000],

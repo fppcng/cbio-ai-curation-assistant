@@ -62,6 +62,12 @@ class InstalledWheelSmokeTest(unittest.TestCase):
                 "cbio_curation_assistant/cbioportal/specification_sources.py",
                 "cbio_curation_assistant/cbioportal/specs.py",
                 "cbio_curation_assistant/cbioportal_spec.py",
+                "cbio_curation_assistant/llm/__init__.py",
+                "cbio_curation_assistant/llm/client.py",
+                "cbio_curation_assistant/llm/models.py",
+                "cbio_curation_assistant/llm/parsing.py",
+                "cbio_curation_assistant/llm/providers.py",
+                "cbio_curation_assistant/llm/settings.py",
                 "cbio_curation_assistant/spec_fetcher.py",
                 "cbio_curation_assistant/spec_match.py",
                 "cbio_curation_assistant/supplements/formats.py",
@@ -125,6 +131,29 @@ class InstalledWheelSmokeTest(unittest.TestCase):
                 timeout=120,
             )
             self.assertEqual(install.returncode, 0, install.stderr or install.stdout)
+
+            llm_import = subprocess.run(
+                [
+                    str(python),
+                    "-c",
+                    (
+                        "from cbio_curation_assistant.llm import "
+                        "build_llm_config, parse_llm_json; "
+                        "build_llm_config('OpenAI', "
+                        "environment={'OPENAI_API_KEY': 'fixture'}); "
+                        "parse_llm_json('{\"installed\": true}')"
+                    ),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            self.assertEqual(
+                llm_import.returncode,
+                0,
+                llm_import.stderr or llm_import.stdout,
+            )
 
             workspace_home = root / "assistant-home"
             workspace = StudyWorkspace.from_study_id(

@@ -5,8 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from cbio_curation_assistant.cbioportal_curator import SYSTEM_PROMPT_CURATOR
-from cbio_curation_assistant.config import LLMConfig
-from cbio_curation_assistant.llm_client import call_llm_with_retry, parse_llm_json
+from cbio_curation_assistant.llm import LLMConfig, complete_text, parse_llm_json
 from cbio_curation_assistant.metadata_merge import merge_missing_metadata_fields
 from cbio_curation_assistant.xml_metadata import extract_metadata_from_xml, extract_xml_llm_text
 
@@ -35,7 +34,7 @@ def extract_xml_metadata_with_llm(
     active_logger = logger or logging.getLogger(__name__)
     raw_meta = ""
     try:
-        raw_meta = call_llm_with_retry(
+        raw_meta = complete_text(
             config=llm_config,
             system=SYSTEM_PROMPT_CURATOR,
             user_content=llm_text[:40000],

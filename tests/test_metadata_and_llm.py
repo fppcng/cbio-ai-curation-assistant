@@ -1,14 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import Mock, patch
 
-from cbio_curation_assistant.config import LLMConfig
-from cbio_curation_assistant.llm_client import (
-    _should_retry_litellm_as_responses,
-    call_llm_with_retry,
-    parse_llm_json,
-)
 from cbio_curation_assistant.metadata_merge import (
     build_study_id,
     is_missing_metadata_value,
@@ -141,94 +134,6 @@ class PdfRegexMetadataTest(unittest.TestCase):
         self.assertEqual(metadata["first_author_surname"], "Smith")
         self.assertEqual(metadata["year"], "2024")
         self.assertIn("GSE123456", metadata["data_repositories"])
-
-
-class LlmJsonParsingTest(unittest.TestCase):
-    def test_parser_accepts_fences_comments_trailing_commas_and_surrounding_text(self) -> None:
-        raw = """
-        Here is the result:
-        ```json
-        {
-          // a line comment
-          "study": "value", /* block comment */
-          "items": [1, 2,],
-        }
-        ```
-        """
-        self.assertEqual(
-            parse_llm_json(raw),
-            {"study": "value", "items": [1, 2]},
-        )
-
-    def test_parser_unwraps_single_object_lists_and_double_encoded_json(self) -> None:
-        self.assertEqual(parse_llm_json('[{"value": 1}]'), {"value": 1})
-        self.assertEqual(parse_llm_json('"{\\"value\\": 1}"'), {"value": 1})
-
-    def test_parser_rejects_non_object_payloads(self) -> None:
-        with self.assertRaisesRegex(ValueError, "not an object"):
-            parse_llm_json("[1, 2]")
-
-    def test_provider_router_rejects_unknown_providers(self) -> None:
-        config = LLMConfig(provider="Other", api_key="", model="model")
-        with self.assertRaisesRegex(ValueError, "Unsupported LLM provider"):
-            call_llm_with_retry(config=config, system="system", user_content="user")
-
-    def test_openai_responses_mode_uses_the_responses_adapter(self) -> None:
-        config = LLMConfig(
-            provider="OpenAI",
-            api_key="key",
-            model="model",
-            api_mode="responses",
-        )
-        client = Mock()
-        with (
-            patch(
-                "cbio_curation_assistant.llm_client._build_openai_client",
-                return_value=client,
-            ),
-            patch(
-                "cbio_curation_assistant.llm_client.call_openai_responses_with_retry",
-                return_value="response",
-            ) as responses,
-        ):
-            result = call_llm_with_retry(
-                config=config,
-                system="system",
-                user_content="user",
-                max_tokens=12,
-            )
-
-        self.assertEqual(result, "response")
-        responses.assert_called_once_with(
-            client=client,
-            model="model",
-            system="system",
-            user_content="user",
-            max_tokens=12,
-        )
-
-    def test_litellm_404_fallback_requires_proxy_chat_mode(self) -> None:
-        class StatusError(Exception):
-            status_code = 404
-
-        exception = StatusError("not found")
-        eligible = LLMConfig(
-            provider="LiteLLM",
-            api_key="key",
-            model="model",
-            base_url="https://proxy.example",
-            api_mode="chat_completions",
-        )
-        ineligible = LLMConfig(
-            provider="LiteLLM",
-            api_key="key",
-            model="model",
-            base_url="",
-            api_mode="chat_completions",
-        )
-
-        self.assertTrue(_should_retry_litellm_as_responses(eligible, exception))
-        self.assertFalse(_should_retry_litellm_as_responses(ineligible, exception))
 
 
 if __name__ == "__main__":

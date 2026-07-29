@@ -29,8 +29,8 @@ from cbio_curation_assistant.cbioportal_curator import (
     extract_pdf_text,
 )
 from cbio_curation_assistant.cli_shared import extract_xml_metadata_with_llm
-from cbio_curation_assistant.config import LLMConfig
 from cbio_curation_assistant.hermes_llm import resolve_optional_hermes_llm_config
+from cbio_curation_assistant.llm import LLMConfig
 from cbio_curation_assistant.pdf_report import (
     build_curation_report_json,
     save_curation_report_pdf,

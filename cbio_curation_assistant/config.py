@@ -1,158 +1,45 @@
-"""
-config.py
----------
-Central configuration for cBioAbstractor.
-All tunable constants live here, including LLM provider settings read from the
-current process environment.
-"""
+"""Compatibility imports for the public :mod:`cbio_curation_assistant.llm` API."""
+
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
-from typing import Callable
 
-ProviderName = str
-ValueLoader = Callable[[str, str], str]
+from cbio_curation_assistant.llm.models import (
+    LLMConfig,
+    ProviderName,
+    ProviderSpec,
+)
+from cbio_curation_assistant.llm.settings import (
+    DEFAULT_PROVIDER_ORDER,
+    ValueLoader,
+    build_llm_config,
+    get_provider_names,
+)
 
-
-@dataclass(frozen=True)
-class LLMConfig:
-    provider: ProviderName
-    api_key: str
-    model: str
-    base_url: str = ""
-    api_mode: str = ""
-
-
-@dataclass(frozen=True)
-class ProviderSpec:
-    api_key_env: str
-    placeholder: str
-    default_model: str
-    model_env: str | None = None
-    model_choices: tuple[str, ...] = ()
-    base_url_env: str | None = None
-    default_base_url: str = ""
-    api_mode_env: str | None = None
-    default_api_mode: str = ""
-    api_modes: tuple[str, ...] = ()
-    requires_api_key: bool = True
-    supports_custom_model: bool = False
-
-
-def _env(name: str, default: str = "") -> str:
-    return os.getenv(name, default).strip()
-
-
-def _normalise_api_mode(value: str | None, default: str = "") -> str:
-    clean = (value or "").strip().lower()
-    return clean or default
-
-
-# ── Paths ─────────────────────────────────────────────────────────────────────
-FEW_SHOT_DIR = _env("FEW_SHOT_DIR", "./few_shot_examples")
-
-# ── Detection / transform settings ────────────────────────────────────────────
-DETECTION_SAMPLE_ROWS = 10
-TRANSFORM_SAMPLE_ROWS = 20
-DETECTION_CONFIDENCE_THRESHOLD = 0.6
-
-# ── Explicit provider settings ────────────────────────────────────────────────
-ANTHROPIC_API_KEY_ENV = "ANTHROPIC_API_KEY"
-ANTHROPIC_MODEL = _env("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
-
-OPENAI_API_KEY_ENV = "OPENAI_API_KEY"
-OPENAI_MODEL = _env("OPENAI_MODEL", "gpt-4o")
-OPENAI_API_MODE = "responses"
-
-LITELLM_API_KEY_ENV = _env("LITELLM_API_KEY_ENV", "LITELLM_API_KEY")
-LITELLM_BASE_URL = _env("LITELLM_BASE_URL")
-LITELLM_MODEL = _env("LITELLM_MODEL", "openai/gpt-4o-mini")
-LITELLM_API_MODE = "responses"
-LITELLM_REASONING_EFFORT = _env("LITELLM_REASONING_EFFORT", "high")
-
-PROVIDER_ORDER: tuple[ProviderName, ...] = ("OpenAI", "Anthropic", "LiteLLM")
-
-PROVIDER_SPECS: dict[ProviderName, ProviderSpec] = {
-    "Anthropic": ProviderSpec(
-        api_key_env=ANTHROPIC_API_KEY_ENV,
-        placeholder="sk-ant-...",
-        default_model=ANTHROPIC_MODEL,
-        model_env="ANTHROPIC_MODEL",
-        model_choices=(
-            "claude-sonnet-4-20250514",
-            "claude-3-5-haiku-20241022",
-            "claude-3-5-sonnet-20241022",
-            "claude-sonnet-4-6",
-            "claude-opus-4-6",
-            "claude-haiku-4-5-20251001",
-        ),
-        default_api_mode="messages",
-        api_modes=("messages",),
-    ),
-    "OpenAI": ProviderSpec(
-        api_key_env=OPENAI_API_KEY_ENV,
-        placeholder="sk-...",
-        default_model=OPENAI_MODEL,
-        model_env="OPENAI_MODEL",
-        model_choices=(
-            "gpt-4o",
-            "gpt-5.5",
-            "gpt-5.5-pro",
-            "gpt-5.4",
-            "gpt-5.4-mini",
-            "gpt-5.4-nano",
-            "gpt-5",
-            "gpt-5-mini",
-            "gpt-5-nano",
-            "gpt-4o-mini",
-            "gpt-4.1",
-            "gpt-4.1-mini",
-        ),
-        default_api_mode=OPENAI_API_MODE,
-        api_modes=("responses",),
-    ),
-    "LiteLLM": ProviderSpec(
-        api_key_env=LITELLM_API_KEY_ENV,
-        placeholder="proxy key",
-        default_model=LITELLM_MODEL,
-        model_env="LITELLM_MODEL",
-        model_choices=(LITELLM_MODEL,),
-        base_url_env="LITELLM_BASE_URL",
-        default_base_url=LITELLM_BASE_URL,
-        default_api_mode=LITELLM_API_MODE,
-        api_modes=(LITELLM_API_MODE,),
-        requires_api_key=True,
-        supports_custom_model=True,
-    ),
-}
-
-def get_provider_names() -> tuple[ProviderName, ...]:
-    return PROVIDER_ORDER
+PROVIDER_ORDER = DEFAULT_PROVIDER_ORDER
 
 
 def read_provider_value(env_name: str | None, default: str = "") -> str:
+    """Read one provider value from the current process environment."""
     if not env_name:
         return default
-    return _env(env_name, default)
+    return os.environ.get(env_name, "").strip() or default
 
 
 def get_provider_default_config(
     provider: ProviderName,
     value_loader: ValueLoader | None = None,
 ) -> LLMConfig:
-    spec = PROVIDER_SPECS[provider]
-    load = value_loader or read_provider_value
-    api_key = load(spec.api_key_env, "")
-    model = load(spec.model_env, spec.default_model) if spec.model_env else spec.default_model
-    base_url = load(spec.base_url_env, spec.default_base_url) if spec.base_url_env else ""
-    api_mode = load(spec.api_mode_env, spec.default_api_mode) if spec.api_mode_env else spec.default_api_mode
-    if spec.model_choices and model not in spec.model_choices and not spec.supports_custom_model:
-        model = spec.default_model
-    return LLMConfig(
-        provider=provider,
-        api_key=api_key,
-        model=model or spec.default_model,
-        base_url=base_url,
-        api_mode=_normalise_api_mode(api_mode, spec.default_api_mode),
-    )
+    """Compatibility wrapper for runtime provider configuration."""
+    return build_llm_config(provider, value_loader=value_loader)
+
+
+__all__ = [
+    "LLMConfig",
+    "PROVIDER_ORDER",
+    "ProviderName",
+    "ProviderSpec",
+    "get_provider_default_config",
+    "get_provider_names",
+    "read_provider_value",
+]
