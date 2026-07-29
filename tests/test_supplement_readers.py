@@ -10,7 +10,7 @@ from docx import Document
 from reportlab.pdfgen import canvas
 
 from cbio_curation_assistant import cbioportal_curator as curator
-from cbio_curation_assistant.spec_match import ClassificationResult
+from cbio_curation_assistant.cbioportal.classification import ClassificationResult
 
 
 def classification_result(format_key: str = "CLINICAL_SAMPLE") -> ClassificationResult:
@@ -111,6 +111,15 @@ class SupplementReaderTest(unittest.TestCase):
         dataframe = pd.DataFrame([["PATIENT_ID", "SAMPLE_ID"], ["P1", "S1"]])
         with (
             patch.object(curator, "_read_file_as_sheets", return_value={"Clinical": dataframe}),
+            patch.object(
+                curator.specification_sources,
+                "fetch_spec",
+                return_value={
+                    "specs": [],
+                    "source": "embedded",
+                    "fetched_at": "fixture",
+                },
+            ),
             patch.object(curator, "classify_sheet", return_value=classification_result()),
         ):
             records = curator._analyse_supplementary_files(["/tmp/source.xlsx"])

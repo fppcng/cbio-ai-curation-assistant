@@ -22,12 +22,16 @@ from typing import Any
 import pandas as pd
 from PyPDF2 import PdfReader
 
+from cbio_curation_assistant.cbioportal import specification_sources
+from cbio_curation_assistant.cbioportal.classification import (
+    ClassificationResult,
+    classify_sheet,
+)
 from cbio_curation_assistant.config import LLMConfig
 from cbio_curation_assistant.llm_client import call_llm_with_retry, parse_llm_json
 from cbio_curation_assistant.pdf_metadata_regex import (
     extract_metadata_regex as _extract_metadata_regex,
 )
-from cbio_curation_assistant.spec_match import ClassificationResult, classify_sheet
 from cbio_curation_assistant.supplements.models import SupplementaryClassification
 
 CURABILITY = {
@@ -309,6 +313,7 @@ def _analyse_supplementary_files(
 ) -> list[SupplementaryClassification]:
     """Inspect each sheet in each supplementary file and return report records."""
     records: list[SupplementaryClassification] = []
+    specification_result: dict[str, Any] | None = None
     for path in supp_paths:
         file_name = Path(path).name
         try:
@@ -319,8 +324,17 @@ def _analyse_supplementary_files(
 
         for sheet_name, df in sheets.items():
             try:
+                if specification_result is None:
+                    specification_result = specification_sources.fetch_spec()
                 record = _build_report_record(
-                    classify_sheet(df),
+                    classify_sheet(
+                        df,
+                        specification_result["specs"],
+                        spec_source=specification_result["source"],
+                        spec_fetched_at=specification_result.get(
+                            "fetched_at", "unknown"
+                        ),
+                    ),
                     file_name=file_name,
                     sheet_name=sheet_name,
                 )

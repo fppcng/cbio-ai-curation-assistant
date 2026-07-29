@@ -14,8 +14,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from cbio_curation_assistant.cbioportal_spec import SPECS
-import cbio_curation_assistant.spec_match as spec_match
+from cbio_curation_assistant.cbioportal import specification_sources
+from cbio_curation_assistant.cbioportal.specs import SPECS
 
 
 STUDY_ID = "pmc8317046"
@@ -172,7 +172,7 @@ def run_report_generation(
         warnings.simplefilter("ignore", ResourceWarning)
         with mock.patch.dict(os.environ, {"CBIO_CURATION_ASSISTANT_HOME": str(REPO_ROOT)}, clear=False):
             with mock.patch.object(
-                spec_match,
+                specification_sources,
                 "fetch_spec",
                 return_value=build_embedded_spec_result(embedded_spec_tag),
             ):

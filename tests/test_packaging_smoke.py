@@ -57,6 +57,16 @@ class InstalledWheelSmokeTest(unittest.TestCase):
             with zipfile.ZipFile(wheel) as archive:
                 names = archive.namelist()
             self.assertIn("cbio_curation_assistant/cli.py", names)
+            for module_path in (
+                "cbio_curation_assistant/cbioportal/classification.py",
+                "cbio_curation_assistant/cbioportal/specification_sources.py",
+                "cbio_curation_assistant/cbioportal/specs.py",
+                "cbio_curation_assistant/cbioportal_spec.py",
+                "cbio_curation_assistant/spec_fetcher.py",
+                "cbio_curation_assistant/spec_match.py",
+            ):
+                with self.subTest(module_path=module_path):
+                    self.assertIn(module_path, names)
             self.assertIn(
                 "cbio_curation_assistant/resources/clinical/clinical_dictionary_snapshot.json",
                 names,
