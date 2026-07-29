@@ -113,11 +113,12 @@ class SupplementReaderTest(unittest.TestCase):
             patch.object(curator, "_read_file_as_sheets", return_value={"Clinical": dataframe}),
             patch.object(
                 curator.specification_sources,
-                "fetch_spec",
+                "get_embedded_spec",
                 return_value={
                     "specs": [],
                     "source": "embedded",
                     "fetched_at": "fixture",
+                    "version": "fixture",
                 },
             ),
             patch.object(curator, "classify_sheet", return_value=classification_result()),

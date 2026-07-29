@@ -1,13 +1,10 @@
-"""Embedded cBioPortal file-format specifications.
+"""Versioned embedded cBioPortal file-format specifications.
 
-The cBioPortal documentation is the upstream authority for file formats. These
-package-owned definitions provide the operational metadata used by the
-classifier, including aliases, target filenames, matrix hints, and notes.
-
-The current runtime policy is intentionally preserved during this refactor:
-live documentation supplies required and optional columns when it can be
-retrieved and parsed, while these definitions fill missing formats and fields
-and provide the complete fallback when live retrieval fails.
+These package-owned definitions are the deterministic runtime source used by
+classification. The cBioPortal documentation is the upstream authority, but
+live documentation is retrieved only by explicit refresh and comparison
+operations. Reviewed upstream changes are promoted by updating these
+definitions, their version, provenance checksum, and tests together.
 
 Each FORMAT entry defines:
   required  – columns that MUST be present for the file to load
@@ -21,7 +18,15 @@ Each FORMAT entry defines:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import hashlib
+import json
+from dataclasses import asdict, dataclass
+from importlib.resources import files
+from typing import Any
+
+
+EMBEDDED_SPEC_RESOURCE_PACKAGE = "cbio_curation_assistant.resources.cbioportal"
+EMBEDDED_SPEC_PROVENANCE_NAME = "specification_provenance.json"
 
 
 @dataclass
@@ -33,6 +38,74 @@ class FormatSpec:
     aliases: dict[str, list[str]]     # canonical → [alias, alias, …]
     matrix: bool = False              # gene × sample matrix?
     notes: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class EmbeddedSpecificationProvenance:
+    """Recorded origin, version, and review policy for the embedded snapshot."""
+
+    schema_version: int
+    dataset: str
+    specification_version: str
+    source: str
+    upstream_document_url: str
+    upstream_repository_url: str
+    upstream_revision: str | None
+    upstream_retrieved_at: str | None
+    repository_introduced_at: str
+    repository_reviewed_at: str
+    sha256: str
+    transformations: tuple[str, ...]
+    promotion_policy: str
+    provenance_notes: str
+
+    @classmethod
+    def from_dict(
+        cls,
+        values: dict[str, Any],
+    ) -> EmbeddedSpecificationProvenance:
+        return cls(
+            schema_version=int(values["schema_version"]),
+            dataset=str(values["dataset"]),
+            specification_version=str(values["specification_version"]),
+            source=str(values["source"]),
+            upstream_document_url=str(values["upstream_document_url"]),
+            upstream_repository_url=str(values["upstream_repository_url"]),
+            upstream_revision=(
+                str(values["upstream_revision"])
+                if values.get("upstream_revision") is not None
+                else None
+            ),
+            upstream_retrieved_at=(
+                str(values["upstream_retrieved_at"])
+                if values.get("upstream_retrieved_at") is not None
+                else None
+            ),
+            repository_introduced_at=str(values["repository_introduced_at"]),
+            repository_reviewed_at=str(values["repository_reviewed_at"]),
+            sha256=str(values["sha256"]),
+            transformations=tuple(str(item) for item in values["transformations"]),
+            promotion_policy=str(values["promotion_policy"]),
+            provenance_notes=str(values["provenance_notes"]),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": self.schema_version,
+            "dataset": self.dataset,
+            "specification_version": self.specification_version,
+            "source": self.source,
+            "upstream_document_url": self.upstream_document_url,
+            "upstream_repository_url": self.upstream_repository_url,
+            "upstream_revision": self.upstream_revision,
+            "upstream_retrieved_at": self.upstream_retrieved_at,
+            "repository_introduced_at": self.repository_introduced_at,
+            "repository_reviewed_at": self.repository_reviewed_at,
+            "sha256": self.sha256,
+            "transformations": list(self.transformations),
+            "promotion_policy": self.promotion_policy,
+            "provenance_notes": self.provenance_notes,
+        }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -346,4 +419,50 @@ SPECS: list[FormatSpec] = [
 SPEC_BY_KEY: dict[str, FormatSpec] = {s.key: s for s in SPECS}
 
 
-__all__ = ["FormatSpec", "SPECS", "SPEC_BY_KEY"]
+def _specification_checksum() -> str:
+    payload = json.dumps(
+        [asdict(spec) for spec in SPECS],
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def load_embedded_specification_provenance() -> EmbeddedSpecificationProvenance:
+    """Load the provenance bundled with the embedded specifications."""
+    resource = files(EMBEDDED_SPEC_RESOURCE_PACKAGE).joinpath(
+        EMBEDDED_SPEC_PROVENANCE_NAME
+    )
+    values = json.loads(resource.read_text(encoding="utf-8"))
+    if not isinstance(values, dict):
+        raise ValueError("Embedded specification provenance must be a JSON object.")
+    return EmbeddedSpecificationProvenance.from_dict(values)
+
+
+def verify_embedded_specifications() -> EmbeddedSpecificationProvenance:
+    """Verify the embedded definitions against their recorded version and hash."""
+    provenance = load_embedded_specification_provenance()
+    actual_checksum = _specification_checksum()
+    if actual_checksum != provenance.sha256:
+        raise ValueError(
+            "Embedded cBioPortal specifications do not match provenance: "
+            f"expected {provenance.sha256}, got {actual_checksum}."
+        )
+    return provenance
+
+
+EMBEDDED_SPEC_PROVENANCE = load_embedded_specification_provenance()
+EMBEDDED_SPEC_VERSION = EMBEDDED_SPEC_PROVENANCE.specification_version
+
+
+__all__ = [
+    "EMBEDDED_SPEC_PROVENANCE",
+    "EMBEDDED_SPEC_VERSION",
+    "EmbeddedSpecificationProvenance",
+    "FormatSpec",
+    "SPECS",
+    "SPEC_BY_KEY",
+    "load_embedded_specification_provenance",
+    "verify_embedded_specifications",
+]

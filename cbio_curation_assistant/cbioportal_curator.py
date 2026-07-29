@@ -325,7 +325,7 @@ def _analyse_supplementary_files(
         for sheet_name, df in sheets.items():
             try:
                 if specification_result is None:
-                    specification_result = specification_sources.fetch_spec()
+                    specification_result = specification_sources.get_embedded_spec()
                 record = _build_report_record(
                     classify_sheet(
                         df,
@@ -334,6 +334,7 @@ def _analyse_supplementary_files(
                         spec_fetched_at=specification_result.get(
                             "fetched_at", "unknown"
                         ),
+                        spec_version=specification_result.get("version", "unknown"),
                     ),
                     file_name=file_name,
                     sheet_name=sheet_name,

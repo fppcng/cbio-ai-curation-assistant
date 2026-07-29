@@ -68,6 +68,10 @@ class InstalledWheelSmokeTest(unittest.TestCase):
                 with self.subTest(module_path=module_path):
                     self.assertIn(module_path, names)
             self.assertIn(
+                "cbio_curation_assistant/resources/cbioportal/specification_provenance.json",
+                names,
+            )
+            self.assertIn(
                 "cbio_curation_assistant/resources/clinical/clinical_dictionary_snapshot.json",
                 names,
             )

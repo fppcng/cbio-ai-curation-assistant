@@ -59,6 +59,7 @@ def build_embedded_spec_result(tag: str) -> dict:
     return {
         "specs": list(SPECS),
         "source": "embedded",
+        "version": "fixture",
         "fetched_at": tag,
         "url": None,
         "error": None,
@@ -173,7 +174,7 @@ def run_report_generation(
         with mock.patch.dict(os.environ, {"CBIO_CURATION_ASSISTANT_HOME": str(REPO_ROOT)}, clear=False):
             with mock.patch.object(
                 specification_sources,
-                "fetch_spec",
+                "get_embedded_spec",
                 return_value=build_embedded_spec_result(embedded_spec_tag),
             ):
                 if use_llm:

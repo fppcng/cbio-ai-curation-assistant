@@ -1,8 +1,9 @@
 """Compatibility adapter for relocated cBioPortal sheet classification.
 
-The legacy ``classify_sheet(df, force_refresh=False)`` API resolves live-first
-specifications before calling the pure package classifier. Remove this module
-after consumers resolve specifications explicitly and import
+The legacy ``classify_sheet(df, force_refresh=False)`` API now resolves the
+deterministic embedded specifications before calling the pure classifier.
+Live retrieval is available only through explicit source refresh/comparison
+APIs. Remove this module after consumers resolve specifications and import
 ``cbio_curation_assistant.cbioportal.classification``.
 """
 
@@ -16,20 +17,26 @@ from cbio_curation_assistant.cbioportal.classification import (
     ClassificationResult,
     classify_sheet as classify_sheet_with_specifications,
 )
-from cbio_curation_assistant.cbioportal.specification_sources import fetch_spec
+from cbio_curation_assistant.cbioportal.specification_sources import get_embedded_spec
 
 
 def classify_sheet(
     df: pd.DataFrame,
     force_refresh: bool = False,
 ) -> ClassificationResult:
-    """Classify a sheet through the legacy live-first convenience API."""
-    fetch_result = fetch_spec(force_refresh=force_refresh)
+    """Classify a sheet through the deterministic embedded convenience API."""
+    if force_refresh:
+        raise ValueError(
+            "Classification no longer refreshes live specifications. "
+            "Use compare_live_specifications() explicitly."
+        )
+    specification_result = get_embedded_spec()
     return classify_sheet_with_specifications(
         df,
-        fetch_result["specs"],
-        spec_source=fetch_result["source"],
-        spec_fetched_at=fetch_result.get("fetched_at", "unknown"),
+        specification_result["specs"],
+        spec_source=specification_result["source"],
+        spec_fetched_at=specification_result.get("fetched_at", "unknown"),
+        spec_version=specification_result.get("version", "unknown"),
     )
 
 

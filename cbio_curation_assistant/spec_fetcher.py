@@ -7,20 +7,32 @@ Remove this module after all consumers import
 from cbio_curation_assistant.cbioportal.specification_sources import (
     CACHE_TTL_SECONDS,
     FETCH_TIMEOUT,
+    SpecificationComparison,
+    SpecificationDifference,
     clear_cache,
+    compare_live_specifications,
+    compare_specifications,
     fetch_spec,
+    get_embedded_spec,
     get_spec_or_fallback,
     parse_upstream_specifications,
+    refresh_live_spec,
 )
 
 
 __all__ = [
     "CACHE_TTL_SECONDS",
     "FETCH_TIMEOUT",
+    "SpecificationComparison",
+    "SpecificationDifference",
     "clear_cache",
+    "compare_live_specifications",
+    "compare_specifications",
     "fetch_spec",
+    "get_embedded_spec",
     "get_spec_or_fallback",
     "parse_upstream_specifications",
+    "refresh_live_spec",
 ]
 
 

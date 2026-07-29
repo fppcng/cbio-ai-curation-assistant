@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "dataset": "Embedded cBioPortal file-format specifications",
+  "specification_version": "1.0.0",
+  "source": "cBioPortal file-format documentation, manually curated into package definitions",
+  "upstream_document_url": "https://docs.cbioportal.org/file-formats/",
+  "upstream_repository_url": "https://github.com/cBioPortal/cbioportal/blob/master/docs/File-Formats.md",
+  "upstream_revision": null,
+  "upstream_retrieved_at": null,
+  "repository_introduced_at": "2026-06-25",
+  "repository_reviewed_at": "2026-07-29",
+  "sha256": "ca577ed000f6d24c83e1fd71fd536795108d55653d930d7fa64e5689e438688a",
+  "transformations": [
+    "Required and optional columns were manually transcribed from upstream documentation",
+    "Aliases, target filenames, matrix hints, and curation notes were added for classifier use"
+  ],
+  "promotion_policy": "Run the explicit live comparison, review every reported change, update specs.py and focused classification tests, increment specification_version, and update this provenance record and checksum in the same commit.",
+  "provenance_notes": "Repository history does not record the exact upstream revision or retrieval date used for the original definitions. Version 1.0.0 identifies the reviewed local snapshot, not an upstream cBioPortal release."
+}

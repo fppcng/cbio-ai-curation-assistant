@@ -38,7 +38,8 @@ class ClassificationResult:
     notes:               str
     verdict:             str
     spec_source:         str   # "live" or "embedded"
-    spec_fetched_at:     str   # ISO timestamp
+    spec_fetched_at:     str   # ISO timestamp or "not-recorded"
+    spec_version:        str = "unknown"
 
 
 def _normalise(s: str) -> str:
@@ -126,13 +127,14 @@ def classify_sheet(
     *,
     spec_source: str,
     spec_fetched_at: str,
+    spec_version: str = "unknown",
 ) -> ClassificationResult:
     """Classify a DataFrame against an explicitly resolved specification."""
-    live_specs = list(specifications)
-    spec_by_key  = {s.key: s for s in live_specs}
+    resolved_specs = list(specifications)
+    spec_by_key = {s.key: s for s in resolved_specs}
 
     col_tokens = _sheet_col_tokens(df)
-    scores     = [_match_spec(s, col_tokens, df) for s in live_specs]
+    scores = [_match_spec(s, col_tokens, df) for s in resolved_specs]
     scores.sort(key=lambda x: x["confidence"], reverse=True)
     best = scores[0]
 
@@ -196,6 +198,7 @@ def classify_sheet(
         verdict=verdict,
         spec_source=spec_source,
         spec_fetched_at=spec_fetched_at,
+        spec_version=spec_version,
     )
 
 
