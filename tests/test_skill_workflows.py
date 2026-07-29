@@ -10,9 +10,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-import pandas as pd
-
-from cbio_curation_assistant.config import LLMConfig
 from cbio_curation_assistant.pmc_supplement_fetcher import PMCErrorClassification
 from cbio_curation_assistant.workspace import StudyWorkspace
 from tests.script_loader import load_script_module
@@ -212,7 +209,7 @@ class CurationReportWorkflowTest(unittest.TestCase):
                 ),
                 patch.object(
                     self.workflow,
-                    "_analyse_supplementary_files",
+                    "analyse_supplementary_files",
                     return_value=records,
                 ),
                 patch.object(

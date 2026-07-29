@@ -30,11 +30,11 @@ import xml.etree.ElementTree as ET
 
 import requests
 
+from cbio_curation_assistant.supplements.formats import (
+    ARCHIVE_EXTENSIONS,
+    SUPPORTED_SUPPLEMENT_EXTENSIONS,
+)
 
-SUPPORTED_SUPPLEMENT_EXTENSIONS = {
-    ".xlsx", ".xls", ".csv", ".tsv", ".txt", ".tab", ".maf", ".doc", ".docx", ".pdf",
-}
-ARCHIVE_EXTENSIONS = {".zip", ".tar", ".tgz", ".gz", ".bz2", ".xz"}
 NCBI_TIMEOUT_SECONDS = 30
 NCBI_TOOL_NAME = "cBioAbstractor"
 NCBI_CONTACT_EMAIL = os.getenv("NCBI_EMAIL", "cBioAbstractor@example.com")

@@ -41,7 +41,7 @@ class AgentReportCliTest(unittest.TestCase):
                     ):
                         with mock.patch.object(
                             report_generator,
-                            "_analyse_supplementary_files",
+                            "analyse_supplementary_files",
                             return_value=[
                                 {
                                     "file": supplementary_path.name,

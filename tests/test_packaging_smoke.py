@@ -64,6 +64,8 @@ class InstalledWheelSmokeTest(unittest.TestCase):
                 "cbio_curation_assistant/cbioportal_spec.py",
                 "cbio_curation_assistant/spec_fetcher.py",
                 "cbio_curation_assistant/spec_match.py",
+                "cbio_curation_assistant/supplements/formats.py",
+                "cbio_curation_assistant/supplements/readers.py",
             ):
                 with self.subTest(module_path=module_path):
                     self.assertIn(module_path, names)

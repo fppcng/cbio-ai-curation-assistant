@@ -13,14 +13,9 @@ This module is intentionally limited to the code paths exercised by
 from __future__ import annotations
 
 import logging
-import shutil
-import subprocess
-import tempfile
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
-
-import pandas as pd
-from PyPDF2 import PdfReader
 
 from cbio_curation_assistant.cbioportal import specification_sources
 from cbio_curation_assistant.cbioportal.classification import (
@@ -33,6 +28,7 @@ from cbio_curation_assistant.pdf_metadata_regex import (
     extract_metadata_regex as _extract_metadata_regex,
 )
 from cbio_curation_assistant.supplements.models import SupplementaryClassification
+from cbio_curation_assistant.supplements.readers import read_supplementary_file
 
 CURABILITY = {
     "CLINICAL_PATIENT": ("YES", "HIGH"),
@@ -84,166 +80,13 @@ Return ONLY the JSON — no markdown fences, no extra text.
 """
 
 
-def _extract_pdf_text(pdf_path: str, max_pages: int = 12) -> str:
+def extract_pdf_text(pdf_path: str, max_pages: int = 12) -> str:
+    """Extract text from the leading pages of a paper PDF with pypdf."""
+    from pypdf import PdfReader
+
     reader = PdfReader(pdf_path)
     pages = reader.pages[:max_pages]
     return "\n".join(page.extract_text() or "" for page in pages)
-
-
-def _read_excel_sheets(path: str) -> dict[str, pd.DataFrame]:
-    """Return non-empty sheets as DataFrames, stripping blank leading rows."""
-    xl = pd.ExcelFile(path)
-    sheets: dict[str, pd.DataFrame] = {}
-    for name in xl.sheet_names:
-        df = xl.parse(name, header=None)
-        df = df.dropna(how="all")
-        if df.empty:
-            continue
-        sheets[name] = df
-    return sheets
-
-
-def _read_file_as_sheets(path: str) -> dict[str, pd.DataFrame]:
-    """
-    Return a dict of sheet-like DataFrames for any supported supplementary file.
-
-    Supported formats:
-      .xlsx / .xls
-      .csv
-      .tsv / .tab / .maf
-      .txt
-      .doc / .docx
-      .pdf
-    """
-    ext = Path(path).suffix.lower()
-
-    if ext in (".xlsx", ".xls"):
-        return _read_excel_sheets(path)
-
-    if ext == ".csv":
-        df = pd.read_csv(path, header=None, dtype=str, encoding_errors="replace")
-        return {"Sheet1": df.dropna(how="all")}
-
-    if ext in (".tsv", ".tab", ".maf"):
-        df = pd.read_csv(path, sep="\t", header=None, dtype=str, encoding_errors="replace")
-        return {"Sheet1": df.dropna(how="all")}
-
-    if ext == ".txt":
-        raw = Path(path).read_text(encoding="utf-8", errors="replace")[:4096]
-        counts = {
-            "\t": raw.count("\t"),
-            ",": raw.count(","),
-            "|": raw.count("|"),
-            " ": raw.count(" "),
-        }
-        sep = max(counts, key=counts.get)
-        if counts[sep] == 0:
-            sep = "\t"
-        df = pd.read_csv(
-            path,
-            sep=sep,
-            header=None,
-            dtype=str,
-            encoding_errors="replace",
-            on_bad_lines="skip",
-        )
-        return {"Sheet1": df.dropna(how="all")}
-
-    if ext in (".doc", ".docx"):
-        try:
-            from docx import Document as _DocxDoc
-        except ImportError as exc:
-            raise ImportError(
-                "python-docx is required to read .doc/.docx files. Install with: pip install python-docx"
-            ) from exc
-
-        if ext == ".doc":
-            if shutil.which("libreoffice"):
-                with tempfile.TemporaryDirectory() as tmp:
-                    subprocess.run(
-                        ["libreoffice", "--headless", "--convert-to", "docx", "--outdir", tmp, path],
-                        capture_output=True,
-                        timeout=30,
-                    )
-                    converted = list(Path(tmp).glob("*.docx"))
-                    if converted:
-                        path = str(converted[0])
-                        ext = ".docx"
-                    else:
-                        ext = "_unknown"
-            else:
-                ext = "_unknown"
-
-        if ext == ".docx":
-            doc = _DocxDoc(path)
-            result: dict[str, pd.DataFrame] = {}
-
-            for index, table in enumerate(doc.tables, start=1):
-                rows = [[cell.text.strip() for cell in row.cells] for row in table.rows]
-                if rows:
-                    result[f"Table_{index}"] = pd.DataFrame(rows).dropna(how="all")
-
-            paragraphs = [paragraph.text.strip() for paragraph in doc.paragraphs if paragraph.text.strip()]
-            if paragraphs:
-                result["Text"] = pd.DataFrame(paragraphs, columns=None)
-
-            if not result:
-                result["Sheet1"] = pd.DataFrame()
-            return result
-
-        try:
-            lines = Path(path).read_text(encoding="utf-8", errors="replace").splitlines()
-            lines = [line for line in lines if line.strip()]
-            return {"Sheet1": pd.DataFrame(lines, columns=None)}
-        except Exception:
-            return {"Sheet1": pd.DataFrame()}
-
-    if ext == ".pdf":
-        try:
-            import pdfplumber
-
-            sheets: dict[str, pd.DataFrame] = {}
-            with pdfplumber.open(path) as pdf:
-                for page_index, page in enumerate(pdf.pages, start=1):
-                    for table_index, table in enumerate(page.extract_tables() or [], start=1):
-                        if table:
-                            sheets[f"Page{page_index}_Table{table_index}"] = (
-                                pd.DataFrame(table).dropna(how="all")
-                            )
-                if not sheets:
-                    lines: list[str] = []
-                    for page in pdf.pages:
-                        text = page.extract_text() or ""
-                        lines.extend(line for line in text.splitlines() if line.strip())
-                    sheets["Text"] = pd.DataFrame(lines, columns=None)
-            return sheets
-        except ImportError:
-            import pypdf
-
-            reader = pypdf.PdfReader(path)
-            lines: list[str] = []
-            for page in reader.pages:
-                text = page.extract_text() or ""
-                lines.extend(line for line in text.splitlines() if line.strip())
-            return {"Text": pd.DataFrame(lines, columns=None)}
-
-    try:
-        return _read_excel_sheets(path)
-    except Exception:
-        pass
-
-    try:
-        df = pd.read_csv(
-            path,
-            sep="\t",
-            header=None,
-            dtype=str,
-            encoding_errors="replace",
-            on_bad_lines="skip",
-        )
-        return {"Sheet1": df.dropna(how="all")}
-    except Exception as exc:
-        raise ValueError(f"Unsupported file format for: {path}") from exc
 
 
 def _extract_metadata_llm(pdf_text: str, llm_config: LLMConfig, temperature: float) -> dict[str, Any]:
@@ -308,8 +151,10 @@ def _build_failed_supplementary_record(
     )
 
 
-def _analyse_supplementary_files(
-    supp_paths: list[str],
+def analyse_supplementary_files(
+    supp_paths: Sequence[str | Path],
+    *,
+    warnings: list[str] | None = None,
 ) -> list[SupplementaryClassification]:
     """Inspect each sheet in each supplementary file and return report records."""
     records: list[SupplementaryClassification] = []
@@ -317,12 +162,18 @@ def _analyse_supplementary_files(
     for path in supp_paths:
         file_name = Path(path).name
         try:
-            sheets = _read_file_as_sheets(path)
+            read_result = read_supplementary_file(path)
         except Exception as exc:
             records.append(_build_failed_supplementary_record(file_name, "-", exc))
             continue
 
-        for sheet_name, df in sheets.items():
+        for warning in read_result.warnings:
+            message = f"{file_name}: {warning}"
+            logging.warning("%s", message)
+            if warnings is not None:
+                warnings.append(message)
+
+        for sheet_name, df in read_result.sheets.items():
             try:
                 if specification_result is None:
                     specification_result = specification_sources.get_embedded_spec()
@@ -348,9 +199,21 @@ def _analyse_supplementary_files(
     return records
 
 
+def _read_file_as_sheets(path: str) -> dict[str, Any]:
+    """Compatibility wrapper; use supplements.readers.read_supplementary_file."""
+    return read_supplementary_file(path).sheets
+
+
+_analyse_supplementary_files = analyse_supplementary_files
+_extract_pdf_text = extract_pdf_text
+
+
 __all__ = [
     "SYSTEM_PROMPT_CURATOR",
+    "analyse_supplementary_files",
+    "extract_pdf_text",
     "_analyse_supplementary_files",
     "_extract_metadata_llm",
     "_extract_pdf_text",
+    "_read_file_as_sheets",
 ]

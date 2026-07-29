@@ -23,7 +23,11 @@ from cbio_curation_assistant.command_result import (
     command_result,
     emit_command_result,
 )
-from cbio_curation_assistant.cbioportal_curator import _analyse_supplementary_files, _extract_metadata_llm, _extract_pdf_text
+from cbio_curation_assistant.cbioportal_curator import (
+    _extract_metadata_llm,
+    analyse_supplementary_files,
+    extract_pdf_text,
+)
 from cbio_curation_assistant.cli_shared import extract_xml_metadata_with_llm
 from cbio_curation_assistant.config import LLMConfig
 from cbio_curation_assistant.hermes_llm import resolve_optional_hermes_llm_config
@@ -31,9 +35,12 @@ from cbio_curation_assistant.pdf_report import (
     build_curation_report_json,
     save_curation_report_pdf,
 )
-from cbio_curation_assistant.pmc_supplement_fetcher import SUPPORTED_SUPPLEMENT_EXTENSIONS
 from cbio_curation_assistant.publications.models import PublicationMetadata
 from cbio_curation_assistant.supplements.models import SupplementaryClassification
+from cbio_curation_assistant.supplements.readers import (
+    discover_supplementary_files,
+    require_supplementary_reader_dependencies,
+)
 from cbio_curation_assistant.workspace import InvalidStudyIdError, StudyWorkspace, WorkspaceConfigurationError
 from cbio_curation_assistant.workflows.curation_report import (
     AgentReportData,
@@ -51,55 +58,6 @@ logger = logging.getLogger(__name__)
 _DEFAULT_REPORT_SUFFIX = "abstractor_report"
 
 
-def _is_supported_supplementary_file(path: Path) -> bool:
-    return path.is_file() and path.suffix.lower() in SUPPORTED_SUPPLEMENT_EXTENSIONS
-
-
-def _expand_supplementary_paths(
-    paths: Sequence[str | Path],
-    *,
-    recursive: bool = False,
-) -> list[str]:
-    
-    resolved_paths: list[str] = []
-    seen: set[str] = set()
-
-    for raw_path in paths:
-        candidate = Path(raw_path).expanduser().resolve()
-        if not candidate.exists():
-            raise FileNotFoundError(f"Supplementary path not found: {candidate}")
-
-        if candidate.is_file():
-            if not _is_supported_supplementary_file(candidate):
-                raise ValueError(f"Unsupported supplementary file type: {candidate}")
-            value = str(candidate)
-            if value not in seen:
-                seen.add(value)
-                resolved_paths.append(value)
-            continue
-
-        if not candidate.is_dir():
-            raise ValueError(f"Unsupported supplementary path: {candidate}")
-
-        iterator = candidate.rglob("*") if recursive else candidate.iterdir()
-        matching_files = sorted(
-            path.resolve()
-            for path in iterator
-            if _is_supported_supplementary_file(path)
-        )
-        
-        for path in matching_files:
-            value = str(path)
-            if value not in seen:
-                seen.add(value)
-                resolved_paths.append(value)
-
-    if not resolved_paths:
-        raise ValueError("No supported supplementary files were found.")
-
-    return resolved_paths
-
-
 def _resolve_study_inputs(study_id: str) -> tuple[StudyWorkspace, str | None, str | None, list[str]]:
     workspace = StudyWorkspace.load(study_id)
     paper_xml_path = workspace.article_xml_path if workspace.article_xml_path.is_file() else None
@@ -111,7 +69,13 @@ def _resolve_study_inputs(study_id: str) -> tuple[StudyWorkspace, str | None, st
             f"Expected {workspace.article_xml_path} or {workspace.article_pdf_path}."
         )
 
-    supplementary_paths = _expand_supplementary_paths([workspace.supplementary_dir], recursive=True)
+    supplementary_paths = [
+        str(path)
+        for path in discover_supplementary_files(
+            [workspace.supplementary_dir],
+            recursive=True,
+        )
+    ]
     return (
         workspace,
         str(paper_pdf_path.resolve()) if paper_pdf_path is not None else None,
@@ -231,7 +195,7 @@ def _extract_pdf_metadata(
     llm_config: LLMConfig | None,
     warnings: list[str],
 ) -> PublicationMetadata:
-    pdf_text = _extract_pdf_text(paper_pdf_path)
+    pdf_text = extract_pdf_text(paper_pdf_path)
     if not pdf_text.strip():
         warnings.append("Could not extract text from the PDF. Metadata fields will be blank.")
         return PublicationMetadata()
@@ -420,14 +384,17 @@ def run_curation_orchestrator(
     if sum(selected_sources) != 1:
         raise ValueError("Provide exactly one of: paper_pdf_path or paper_xml_path.")
 
-    resolved_llm_config = llm_config or resolve_optional_hermes_llm_config()
-
     warnings: list[str] = []
     meta: PublicationMetadata
-    supp_paths = _expand_supplementary_paths(
-        supplementary_paths or [],
-        recursive=recursive_supplementary_search,
-    )
+    supp_paths = [
+        str(path)
+        for path in discover_supplementary_files(
+            supplementary_paths or [],
+            recursive=recursive_supplementary_search,
+        )
+    ]
+    require_supplementary_reader_dependencies(supp_paths)
+    resolved_llm_config = llm_config or resolve_optional_hermes_llm_config()
 
     if paper_pdf_path:
         paper_path = Path(paper_pdf_path).expanduser().resolve()
@@ -461,7 +428,7 @@ def run_curation_orchestrator(
     if study_workspace is None:
         study_workspace = _infer_study_workspace([paper_path, *supp_paths])
 
-    raw_records = _analyse_supplementary_files(supp_paths)
+    raw_records = analyse_supplementary_files(supp_paths, warnings=warnings)
     records = tuple(
         record
         if isinstance(record, SupplementaryClassification)
