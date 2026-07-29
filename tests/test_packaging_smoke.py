@@ -58,6 +58,14 @@ class InstalledWheelSmokeTest(unittest.TestCase):
                 names = archive.namelist()
             self.assertIn("cbio_curation_assistant/cli.py", names)
             self.assertIn(
+                "cbio_curation_assistant/resources/clinical/clinical_dictionary_snapshot.json",
+                names,
+            )
+            self.assertIn(
+                "cbio_curation_assistant/resources/clinical/provenance.json",
+                names,
+            )
+            self.assertIn(
                 "cbio_curation_assistant/resources/oncotree/oncotree_snapshot.tsv",
                 names,
             )
@@ -153,6 +161,36 @@ class InstalledWheelSmokeTest(unittest.TestCase):
             self.assertEqual(
                 oncotree_payload["result"]["query_results"][0]["oncotree_code"],
                 "LUAD",
+            )
+
+            clinical_dictionary = subprocess.run(
+                [
+                    str(command),
+                    "clinical-dictionary",
+                    "--source-column",
+                    "patient age",
+                    "--considered-column",
+                    "AGE",
+                    "--limit",
+                    "1",
+                    "--json",
+                ],
+                env=environment,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            self.assertEqual(
+                clinical_dictionary.returncode,
+                0,
+                clinical_dictionary.stderr,
+            )
+            dictionary_payload = json.loads(clinical_dictionary.stdout)
+            self.assertEqual(dictionary_payload["status"], "success")
+            self.assertEqual(
+                dictionary_payload["result"][0]["column_header"],
+                "AGE",
             )
 
 

@@ -70,6 +70,35 @@ class CliDispatchTest(unittest.TestCase):
         self.assertEqual(code, 7)
         run.assert_called_once_with(["--query", "LUAD", "--json"])
 
+    def test_clinical_dictionary_uses_direct_package_dispatch(self) -> None:
+        self.assertNotIn("clinical-dictionary", cli._SCRIPT_COMMANDS)
+        with patch.object(
+            cli,
+            "run_clinical_dictionary_command",
+            return_value=7,
+        ) as run:
+            code = cli.main(
+                [
+                    "clinical-dictionary",
+                    "--source-column",
+                    "survival",
+                    "--considered-column",
+                    "OS_MONTHS",
+                    "--json",
+                ]
+            )
+
+        self.assertEqual(code, 7)
+        run.assert_called_once_with(
+            [
+                "--source-column",
+                "survival",
+                "--considered-column",
+                "OS_MONTHS",
+                "--json",
+            ]
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

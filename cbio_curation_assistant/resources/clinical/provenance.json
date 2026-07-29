@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "dataset": "MSK Clinical Data Dictionary snapshot",
+  "filename": "clinical_dictionary_snapshot.json",
+  "source": "MSK Clinical Data Dictionary; the exact upstream export endpoint was not recorded",
+  "upstream_service_url": "https://cdd.cbioportal.mskcc.org/swagger-ui.html",
+  "upstream_version": null,
+  "upstream_retrieved_at": null,
+  "repository_introduced_at": "2026-06-25",
+  "sha256": "fea855b3d0370c45a936751187f74d8ea3d5941dc485ecb98b2c355f38c530ad",
+  "transformations": [
+    "Renamed from dictionary.json to clinical_dictionary_snapshot.json without modifying its bytes"
+  ],
+  "license": null,
+  "provenance_notes": "The repository documentation attributes the dictionary to the MSK Clinical Data Dictionary service, but repository history does not record the exact export endpoint, upstream version, retrieval date, or license."
+}

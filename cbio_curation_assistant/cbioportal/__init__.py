@@ -1,5 +1,16 @@
 """Reusable cBioPortal domain functionality."""
 
+from cbio_curation_assistant.cbioportal.clinical_dictionary import (
+    ClinicalDictionaryAttribute,
+    ClinicalDictionaryMatch,
+    ClinicalDictionaryProvenance,
+    load_clinical_dictionary,
+    load_clinical_dictionary_provenance,
+    load_default_clinical_dictionary,
+    score_clinical_dictionary_candidate,
+    search_clinical_dictionary,
+    verify_packaged_clinical_dictionary,
+)
 from cbio_curation_assistant.cbioportal.oncotree import (
     ClinicalOncotreeInspection,
     ClinicalValueSuggestion,
@@ -16,6 +27,9 @@ from cbio_curation_assistant.cbioportal.oncotree import (
 )
 
 __all__ = [
+    "ClinicalDictionaryAttribute",
+    "ClinicalDictionaryMatch",
+    "ClinicalDictionaryProvenance",
     "ClinicalOncotreeInspection",
     "ClinicalValueSuggestion",
     "OncotreeCandidate",
@@ -23,9 +37,15 @@ __all__ = [
     "OncotreeProvenance",
     "OncotreeSearchResult",
     "inspect_clinical_sample",
+    "load_clinical_dictionary",
+    "load_clinical_dictionary_provenance",
+    "load_default_clinical_dictionary",
     "load_default_oncotree_candidates",
     "load_oncotree_candidates",
     "load_oncotree_provenance",
     "score_candidate",
+    "score_clinical_dictionary_candidate",
+    "search_clinical_dictionary",
     "search_oncotree",
+    "verify_packaged_clinical_dictionary",
 ]
