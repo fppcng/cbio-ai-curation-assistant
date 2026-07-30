@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from cbio_curation_assistant.command_result import CommandStatus
-from cbio_curation_assistant.pmc_supplement_fetcher import ResolvedStudyIdentifier
+from cbio_curation_assistant.integrations.pmc import ResolvedStudyIdentifier
 
 
 @dataclass(frozen=True, slots=True)

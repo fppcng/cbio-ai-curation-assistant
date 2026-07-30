@@ -9,6 +9,50 @@ from unittest.mock import Mock, patch
 import requests
 
 from cbio_curation_assistant import pmc_supplement_fetcher as pmc
+from cbio_curation_assistant.integrations import pmc as public_pmc
+
+
+class PmcPublicApiTest(unittest.TestCase):
+    def test_legacy_facade_reexports_public_models_and_identifier_helpers(
+        self,
+    ) -> None:
+        self.assertIs(pmc.PMCRequestError, public_pmc.PMCRequestError)
+        self.assertIs(
+            pmc.ResolvedStudyIdentifier,
+            public_pmc.ResolvedStudyIdentifier,
+        )
+        self.assertIs(pmc.normalize_pmcid, public_pmc.normalize_pmcid)
+
+    def test_public_identifier_resolution_accepts_an_injected_pmid_resolver(
+        self,
+    ) -> None:
+        converter = Mock(return_value="PMC789")
+
+        resolved = public_pmc.resolve_study_identifier_to_pmcid(
+            "PMID456",
+            pmid_resolver=converter,
+        )
+
+        converter.assert_called_once_with("456")
+        self.assertEqual(resolved.to_dict()["pmcid"], "PMC789")
+
+    def test_public_discovery_api_matches_the_legacy_facade(self) -> None:
+        xml = """
+        <article xmlns:xlink="http://www.w3.org/1999/xlink">
+          <supplementary-material xlink:href="table.xlsx" />
+        </article>
+        """
+
+        self.assertEqual(
+            public_pmc.discover_supplement_urls(
+                "PMC123",
+                xml_text=xml,
+            ),
+            pmc._discover_supplement_urls(
+                "PMC123",
+                xml_text=xml,
+            ),
+        )
 
 
 class PmcIdentifierTest(unittest.TestCase):
@@ -119,6 +163,89 @@ class PmcErrorAndRetryTest(unittest.TestCase):
         self.assertEqual(raised.exception.category, "invalid_identifier")
         self.assertEqual(request.call_count, 1)
         sleep.assert_not_called()
+
+
+class PmcTransportAndDiscoveryTest(unittest.TestCase):
+    def test_xml_discovery_preserves_link_resolution_and_order(self) -> None:
+        xml = """
+        <article xmlns:xlink="http://www.w3.org/1999/xlink">
+          <supplementary-material xlink:href="table.xlsx" />
+          <supplementary-material>
+            <media xlink:href="supp/nested.csv" />
+            <graphic xlink:href="/articles/PMC123/bin/root.tsv" />
+            <inline-supplementary-material
+              xlink:href="https://example.org/absolute.txt"
+            />
+          </supplementary-material>
+        </article>
+        """
+
+        self.assertEqual(
+            pmc._supplement_urls("PMC123", xml),
+            [
+                "https://pmc.ncbi.nlm.nih.gov/articles/instance/123/bin/table.xlsx",
+                "https://pmc.ncbi.nlm.nih.gov/articles/PMC123/supp/nested.csv",
+                "https://pmc.ncbi.nlm.nih.gov/articles/PMC123/bin/root.tsv",
+                "https://example.org/absolute.txt",
+            ],
+        )
+
+    def test_html_discovery_filters_links_and_preserves_first_occurrence(self) -> None:
+        html = """
+        <html><body>
+          <a href="/articles/instance/123/bin/table.xlsx">Table</a>
+          <a href="/articles/instance/123/bin/table.xlsx">Duplicate</a>
+          <a data-ga-action="click_feat_suppl" href="files/notes.txt">Notes</a>
+          <a href="/articles/instance/999/bin/other.csv">Other article</a>
+          <a data-ga-action="click_feat_suppl" href="files/readme.md">Unsupported</a>
+        </body></html>
+        """
+
+        self.assertEqual(
+            pmc._supplement_urls_from_article_html("PMC123", html),
+            [
+                "https://pmc.ncbi.nlm.nih.gov/articles/instance/123/bin/table.xlsx",
+                "https://pmc.ncbi.nlm.nih.gov/articles/PMC123/files/notes.txt",
+            ],
+        )
+
+    def test_article_pdf_discovery_accepts_article_and_root_pdf_paths(self) -> None:
+        article_html = (
+            '<a href="/articles/PMC123/pdf/paper.pdf">PDF</a>'
+            '<a href="/pdf/fallback.pdf">Fallback</a>'
+        )
+        fallback_html = '<a href="/pdf/fallback.pdf">Fallback</a>'
+
+        self.assertEqual(
+            pmc._article_pdf_url_from_article_html("PMC123", article_html),
+            "https://pmc.ncbi.nlm.nih.gov/articles/PMC123/pdf/paper.pdf",
+        )
+        self.assertEqual(
+            pmc._article_pdf_url_from_article_html("PMC123", fallback_html),
+            "https://pmc.ncbi.nlm.nih.gov/pdf/fallback.pdf",
+        )
+        self.assertIsNone(
+            pmc._article_pdf_url_from_article_html(
+                "PMC123",
+                '<a href="/articles/PMC999/pdf/other.pdf">Other</a>',
+            )
+        )
+
+    def test_xml_fetch_retries_an_unexpected_payload_with_the_same_error(self) -> None:
+        response = Mock(text="<html>not an article</html>")
+        response.raise_for_status.return_value = None
+
+        with (
+            patch.object(pmc.requests, "get", return_value=response) as get,
+            patch.object(pmc.time, "sleep") as sleep,
+        ):
+            with self.assertRaises(pmc.PMCRequestError) as raised:
+                pmc._fetch_pmc_xml("PMC123")
+
+        self.assertEqual(raised.exception.category, "unexpected_response")
+        self.assertTrue(raised.exception.retryable)
+        self.assertEqual(get.call_count, 3)
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [1.0, 2.0])
 
 
 class PmcDownloadSafetyTest(unittest.TestCase):

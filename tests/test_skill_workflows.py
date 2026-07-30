@@ -10,7 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from cbio_curation_assistant.pmc_supplement_fetcher import PMCErrorClassification
+from cbio_curation_assistant.integrations.pmc import PMCErrorClassification
 from cbio_curation_assistant.workspace import StudyWorkspace
 from tests.script_loader import load_script_module
 

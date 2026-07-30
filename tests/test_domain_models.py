@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from cbio_curation_assistant.command_result import command_result
-from cbio_curation_assistant.pmc_supplement_fetcher import ResolvedStudyIdentifier
+from cbio_curation_assistant.integrations.pmc import ResolvedStudyIdentifier
 from cbio_curation_assistant.publications.models import PublicationMetadata
 from cbio_curation_assistant.supplements.models import SupplementaryClassification
 from cbio_curation_assistant.workflows.curation_report import (

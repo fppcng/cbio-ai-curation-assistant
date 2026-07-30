@@ -17,19 +17,21 @@ from cbio_curation_assistant.command_result import (
     emit_command_result,
     exit_code_for_status,
 )
-from cbio_curation_assistant.pmc_supplement_fetcher import (
+from cbio_curation_assistant.integrations.pmc import (
     PMCRequestError,
     ResolvedStudyIdentifier,
-    SUPPORTED_SUPPLEMENT_EXTENSIONS,
-    _article_pdf_url_from_article_html,
-    _download_url,
-    _extract_supported_files,
-    _fetch_pmc_article_html,
-    _fetch_pmc_xml,
-    _oa_package_url,
-    download_pmc_supplements,
+    discover_article_pdf_url,
+    fetch_pmc_article_html,
+    fetch_pmc_xml,
+    lookup_oa_package_url,
     normalize_pmcid,
     pmid_to_pmcid,
+)
+from cbio_curation_assistant.pmc_supplement_fetcher import (
+    SUPPORTED_SUPPLEMENT_EXTENSIONS,
+    _download_url,
+    _extract_supported_files,
+    download_pmc_supplements,
 )
 from cbio_curation_assistant.workspace import StudyWorkspace, resolve_assistant_home
 from cbio_curation_assistant.workflows.study_download import (
@@ -135,7 +137,7 @@ def _ensure_xml(article_xml_path: Path, pmcid: str) -> tuple[Path, bool]:
     if article_xml_path.exists():
         return article_xml_path.resolve(), True
 
-    xml_text = _fetch_pmc_xml(pmcid)
+    xml_text = fetch_pmc_xml(pmcid)
     article_xml_path.write_text(xml_text, encoding="utf-8")
     return article_xml_path.resolve(), False
 
@@ -189,15 +191,15 @@ def _ensure_article_pdf(
         return article_pdf_path.resolve(), False
 
     try:
-        package_url = _oa_package_url(pmcid)
+        package_url = lookup_oa_package_url(pmcid)
     except PMCRequestError as exc:
         warnings.append(f"Article PDF lookup failed: {_format_pmc_error(exc)}")
         return None, False
 
     if not package_url:
         try:
-            article_html = _fetch_pmc_article_html(pmcid)
-            direct_pdf_url = _article_pdf_url_from_article_html(pmcid, article_html)
+            article_html = fetch_pmc_article_html(pmcid)
+            direct_pdf_url = discover_article_pdf_url(pmcid, article_html)
         except PMCRequestError as exc:
             warnings.append(f"Article PDF lookup failed: {_format_pmc_error(exc)}")
             return None, False
