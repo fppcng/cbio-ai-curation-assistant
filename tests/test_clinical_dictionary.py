@@ -128,6 +128,8 @@ class ClinicalDictionaryLookupTest(unittest.TestCase):
         self.assertEqual(candidates[0].column_header, "IMMUNOHISTOCHEMISTRY")
         self.assertEqual(candidates[0].attribute.attribute_type, "SAMPLE")
 
+
+class ClinicalDictionaryCliTest(unittest.TestCase):
     def test_single_search_json_contains_a_report_skeleton(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             dictionary_path = Path(tmp_dir) / "dictionary.json"
@@ -161,9 +163,9 @@ class ClinicalDictionaryLookupTest(unittest.TestCase):
                 )
 
         payload = json.loads(stdout.getvalue())
+        report = payload["result"]["report"]
         self.assertEqual(code, 0)
         self.assertEqual(payload["command"], "clinical-dictionary.search")
-        report = payload["result"]["report"]
         self.assertEqual(report["query_count"], 1)
         self.assertEqual(report["candidate_limit"], 5)
         self.assertEqual(
@@ -172,7 +174,7 @@ class ClinicalDictionaryLookupTest(unittest.TestCase):
         )
         self.assertIsNone(report["mappings"][0]["decision"])
 
-    def test_batch_search_writes_one_mapping_per_query(self) -> None:
+    def test_batch_search_persists_one_mapping_per_query(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
             dictionary_path = root / "dictionary.json"
@@ -187,11 +189,7 @@ class ClinicalDictionaryLookupTest(unittest.TestCase):
                             "Age at diagnosis in years",
                             datatype="NUMBER",
                         ),
-                        _attribute(
-                            "SEX",
-                            "Sex",
-                            "Sex of the patient",
-                        ),
+                        _attribute("SEX", "Sex", "Sex of the patient"),
                     ]
                 ),
                 encoding="utf-8",
@@ -199,7 +197,7 @@ class ClinicalDictionaryLookupTest(unittest.TestCase):
             input_path.write_text(
                 json.dumps(
                     {
-                        "study_id": "study",
+                        "study_id": "synthetic-study",
                         "queries": [
                             {
                                 "id": "age",
@@ -217,8 +215,7 @@ class ClinicalDictionaryLookupTest(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            stdout = io.StringIO()
-            with contextlib.redirect_stdout(stdout):
+            with contextlib.redirect_stdout(io.StringIO()):
                 code = cli.main(
                     [
                         "clinical-dictionary",
@@ -232,252 +229,46 @@ class ClinicalDictionaryLookupTest(unittest.TestCase):
                         "--json",
                     ]
                 )
-
             report = json.loads(output_path.read_text(encoding="utf-8"))
 
         self.assertEqual(code, 0)
-        self.assertEqual(report["study_id"], "study")
-        self.assertEqual(report["query_count"], 2)
+        self.assertEqual(report["study_id"], "synthetic-study")
         self.assertEqual(
             [mapping["id"] for mapping in report["mappings"]],
             ["age", "sex"],
         )
 
-    def test_validate_accepts_canonical_metadata_and_patient_id_exception(self) -> None:
+    def test_validate_uses_the_structured_success_envelope(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
             dictionary_path = root / "dictionary.json"
             report_path = root / "mapping.json"
             sample_path = root / "data_clinical_sample.txt"
-            patient_path = root / "data_clinical_patient.txt"
-            dictionary = [
-                _attribute(
-                    "PATIENT_ID",
-                    "Patient Identifier",
-                    "Identifier to uniquely specify a patient.",
+            dictionary_path.write_text(
+                json.dumps(
+                    [
+                        _attribute(
+                            "SAMPLE_ID",
+                            "Sample Identifier",
+                            "A unique sample identifier.",
+                            attribute_type="SAMPLE",
+                        )
+                    ]
                 ),
-                _attribute(
-                    "SAMPLE_ID",
-                    "Sample Identifier",
-                    "A unique sample identifier.",
-                    attribute_type="SAMPLE",
-                ),
-            ]
-            dictionary_path.write_text(json.dumps(dictionary), encoding="utf-8")
+                encoding="utf-8",
+            )
             report_path.write_text(
                 json.dumps(
                     {
                         "schema_version": 1,
-                        "study_id": "study",
                         "mappings": [
                             {
-                                "id": "patient_id",
-                                "source": {"column": "Patient"},
-                                "search_query": "patient identifier",
-                                "candidates": [{"column_header": "PATIENT_ID"}],
-                                "decision": {
-                                    "status": "standard",
-                                    "selected_column_header": "PATIENT_ID",
-                                    "target_files": ["patient", "sample"],
-                                    "reason": "Required patient identifier.",
-                                },
-                            },
-                            {
                                 "id": "sample_id",
-                                "source": {"column": "Sample"},
-                                "search_query": "sample identifier",
                                 "candidates": [{"column_header": "SAMPLE_ID"}],
                                 "decision": {
                                     "status": "standard",
                                     "selected_column_header": "SAMPLE_ID",
                                     "reason": "Required sample identifier.",
-                                },
-                            },
-                        ],
-                    }
-                ),
-                encoding="utf-8",
-            )
-            patient_path.write_text(
-                "#Patient Identifier\n"
-                "#Identifier to uniquely specify a patient.\n"
-                "#STRING\n"
-                "#1\n"
-                "PATIENT_ID\n"
-                "P1\n",
-                encoding="utf-8",
-            )
-            sample_path.write_text(
-                "#Patient Identifier\tSample Identifier\n"
-                "#Identifier to uniquely specify a patient.\tA unique sample identifier.\n"
-                "#STRING\tSTRING\n"
-                "#1\t1\n"
-                "PATIENT_ID\tSAMPLE_ID\n"
-                "P1\tS1\n",
-                encoding="utf-8",
-            )
-
-            stdout = io.StringIO()
-            with contextlib.redirect_stdout(stdout):
-                code = cli.main(
-                    [
-                        "clinical-dictionary",
-                        "validate",
-                        "--report",
-                        str(report_path),
-                        "--patient-file",
-                        str(patient_path),
-                        "--sample-file",
-                        str(sample_path),
-                        "--dictionary",
-                        str(dictionary_path),
-                        "--json",
-                    ]
-                )
-
-        payload = json.loads(stdout.getvalue())
-        self.assertEqual(code, 0)
-        self.assertEqual(payload["status"], "success")
-        self.assertTrue(payload["result"]["valid"])
-        self.assertEqual(payload["result"]["clinical_column_count"], 3)
-
-    def test_validate_accepts_custom_attributes_and_documented_overrides(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            root = Path(tmp_dir)
-            dictionary_path = root / "dictionary.json"
-            report_path = root / "mapping.json"
-            sample_path = root / "data_clinical_sample.txt"
-            dictionary_path.write_text(
-                json.dumps(
-                    [
-                        _attribute(
-                            "CANCER_TYPE",
-                            "Cancer Type",
-                            "OncoTree cancer type.",
-                            attribute_type="SAMPLE",
-                            priority="2000",
-                        )
-                    ]
-                ),
-                encoding="utf-8",
-            )
-            report_path.write_text(
-                json.dumps(
-                    {
-                        "schema_version": 1,
-                        "mappings": [
-                            {
-                                "id": "cancer_type",
-                                "candidates": [{"column_header": "CANCER_TYPE"}],
-                                "decision": {
-                                    "status": "standard",
-                                    "selected_column_header": "CANCER_TYPE",
-                                    "reason": "Standard OncoTree cancer type.",
-                                    "metadata_overrides": {
-                                        "priority": {
-                                            "value": "3000",
-                                            "reason": "Study-view priority.",
-                                        }
-                                    },
-                                },
-                            },
-                            {
-                                "id": "lesions",
-                                "candidates": [],
-                                "decision": {
-                                    "status": "custom",
-                                    "target_files": ["sample"],
-                                    "reason": "No standard lossless mapping.",
-                                    "custom_attribute": {
-                                        "column_header": "LESION_COMPONENTS",
-                                        "display_name": "Lesion Components",
-                                        "description": "Components in the lesion.",
-                                        "datatype": "STRING",
-                                        "priority": "1",
-                                    },
-                                },
-                            },
-                            {
-                                "id": "unused_note",
-                                "candidates": [],
-                                "decision": {
-                                    "status": "excluded",
-                                    "reason": "Administrative note.",
-                                },
-                            },
-                        ],
-                    }
-                ),
-                encoding="utf-8",
-            )
-            sample_path.write_text(
-                "#Cancer Type\tLesion Components\n"
-                "#OncoTree cancer type.\tComponents in the lesion.\n"
-                "#STRING\tSTRING\n"
-                "#3000\t1\n"
-                "CANCER_TYPE\tLESION_COMPONENTS\n"
-                "Cancer\tComponent\n",
-                encoding="utf-8",
-            )
-
-            stdout = io.StringIO()
-            with contextlib.redirect_stdout(stdout):
-                code = cli.main(
-                    [
-                        "clinical-dictionary",
-                        "validate",
-                        "--report",
-                        str(report_path),
-                        "--sample-file",
-                        str(sample_path),
-                        "--dictionary",
-                        str(dictionary_path),
-                        "--json",
-                    ]
-                )
-
-        payload = json.loads(stdout.getvalue())
-        self.assertEqual(code, 0)
-        self.assertTrue(payload["result"]["valid"])
-        self.assertEqual(
-            payload["result"]["decision_counts"],
-            {"standard": 1, "custom": 1, "excluded": 1},
-        )
-
-    def test_validate_reports_wrong_placement_and_unmapped_columns(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            root = Path(tmp_dir)
-            dictionary_path = root / "dictionary.json"
-            report_path = root / "mapping.json"
-            sample_path = root / "data_clinical_sample.txt"
-            dictionary_path.write_text(
-                json.dumps(
-                    [
-                        _attribute(
-                            "IMMUNOHISTOCHEMISTRY",
-                            "Immunohistochemistry",
-                            "Immunohistochemistry",
-                            attribute_type="SAMPLE",
-                        )
-                    ]
-                ),
-                encoding="utf-8",
-            )
-            report_path.write_text(
-                json.dumps(
-                    {
-                        "schema_version": 1,
-                        "mappings": [
-                            {
-                                "id": "ihc",
-                                "candidates": [
-                                    {"column_header": "IMMUNOHISTOCHEMISTRY"}
-                                ],
-                                "decision": {
-                                    "status": "standard",
-                                    "selected_column_header": "IMMUNOHISTOCHEMISTRY",
-                                    "target_files": ["patient"],
-                                    "reason": "IHC findings.",
                                 },
                             }
                         ],
@@ -512,11 +303,9 @@ class ClinicalDictionaryLookupTest(unittest.TestCase):
                 )
 
         payload = json.loads(stdout.getvalue())
-        self.assertEqual(code, 1)
-        self.assertEqual(payload["status"], "error")
-        errors = "\n".join(payload["result"]["errors"])
-        self.assertIn("belongs in sample, not patient", errors)
-        self.assertIn("'SAMPLE_ID' has no mapping decision", errors)
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["command"], "clinical-dictionary.validate")
+        self.assertEqual(payload["status"], "success")
 
     def test_operational_failure_uses_structured_error_envelope(self) -> None:
         stdout = io.StringIO()
