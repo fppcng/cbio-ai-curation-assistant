@@ -23,19 +23,18 @@ from cbio_curation_assistant.command_result import (
     command_result,
     emit_command_result,
 )
-from cbio_curation_assistant.cbioportal_curator import (
-    _extract_metadata_llm,
-    analyse_supplementary_files,
-    extract_pdf_text,
-)
-from cbio_curation_assistant.cli_shared import extract_xml_metadata_with_llm
+from cbio_curation_assistant.cbioportal_curator import analyse_supplementary_files
 from cbio_curation_assistant.hermes_llm import resolve_optional_hermes_llm_config
 from cbio_curation_assistant.llm import LLMConfig
 from cbio_curation_assistant.pdf_report import (
     build_curation_report_json,
     save_curation_report_pdf,
 )
-from cbio_curation_assistant.publications.models import PublicationMetadata
+from cbio_curation_assistant.publications import (
+    PublicationMetadata,
+    extract_pdf_metadata_with_llm,
+    extract_xml_metadata_with_llm,
+)
 from cbio_curation_assistant.supplements.models import SupplementaryClassification
 from cbio_curation_assistant.supplements.readers import (
     discover_supplementary_files,
@@ -188,30 +187,6 @@ def _merge_breakdown_values(
             seen.add(text)
             values.append(text)
     return tuple(values)
-
-
-def _extract_pdf_metadata(
-    paper_pdf_path: str,
-    llm_config: LLMConfig | None,
-    warnings: list[str],
-) -> PublicationMetadata:
-    pdf_text = extract_pdf_text(paper_pdf_path)
-    if not pdf_text.strip():
-        warnings.append("Could not extract text from the PDF. Metadata fields will be blank.")
-        return PublicationMetadata()
-
-    if llm_config is None:
-        warnings.append("No Hermes LLM configuration is available. PDF metadata fields will be blank.")
-        return PublicationMetadata()
-
-    try:
-        return PublicationMetadata.from_mapping(
-            _extract_metadata_llm(pdf_text, llm_config, temperature=0.2)
-        )
-    except Exception as exc:
-        logger.exception("PDF metadata extraction failed for %s", paper_pdf_path)
-        warnings.append(f"Metadata extraction failed: {exc}")
-        return PublicationMetadata()
 
 
 def _build_report_stem(
@@ -400,7 +375,12 @@ def run_curation_orchestrator(
         paper_path = Path(paper_pdf_path).expanduser().resolve()
         if not paper_path.is_file():
             raise FileNotFoundError(f"Paper PDF not found: {paper_path}")
-        meta = _extract_pdf_metadata(str(paper_path), resolved_llm_config, warnings)
+        meta = extract_pdf_metadata_with_llm(
+            paper_path,
+            resolved_llm_config,
+            warnings,
+            logger=logger,
+        )
         paper_source = PaperSource(kind="pdf", path=paper_path)
     else:
         paper_path = Path(paper_xml_path or "").expanduser().resolve()

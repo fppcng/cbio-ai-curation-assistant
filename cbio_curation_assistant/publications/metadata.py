@@ -45,3 +45,10 @@ def merge_missing_metadata_fields(base: dict, completion: dict) -> dict:
         year=merged.get("year"),
     )
     return merged
+
+
+__all__ = [
+    "build_study_id",
+    "is_missing_metadata_value",
+    "merge_missing_metadata_fields",
+]

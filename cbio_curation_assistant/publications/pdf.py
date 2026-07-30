@@ -1,5 +1,16 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+
+def extract_pdf_text(pdf_path: str | Path, max_pages: int = 12) -> str:
+    """Extract text from the leading pages of a publication PDF."""
+    from pypdf import PdfReader
+
+    reader = PdfReader(str(pdf_path))
+    pages = reader.pages[:max_pages]
+    return "\n".join(page.extract_text() or "" for page in pages)
+
 
 def extract_metadata_regex(pdf_text: str) -> dict:
     """
@@ -36,28 +47,35 @@ def extract_metadata_regex(pdf_text: str) -> dict:
     # Strategy 1: lines before first author block (typical journal layout)
     # Article title usually appears in all-caps or title-case before author names
     title_candidates = []
-    for l in pdf_text.splitlines()[:60]:   # first 60 lines of PDF text
-        l = l.strip()
-        if not l or len(l) < 15:
+    for line in pdf_text.splitlines()[:60]:   # first 60 lines of PDF text
+        line = line.strip()
+        if not line or len(line) < 15:
             continue
         # Skip journal name lines (all caps, short)
-        if l.isupper() and len(l) < 30:
+        if line.isupper() and len(line) < 30:
             continue
         # Skip lines that look like author lists (contains superscript-style digits)
-        if _re.search(r"[A-Z][a-z]+[,\d]", l):
+        if _re.search(r"[A-Z][a-z]+[,\d]", line):
             continue
         # Skip DOI lines, page numbers, volume info
-        if _re.search(r"10\.\d{4,}/|doi\.org|^\d+$|\bVol\b|\bDOI\b", l, _re.I):
+        if _re.search(
+            r"10\.\d{4,}/|doi\.org|^\d+$|\bVol\b|\bDOI\b",
+            line,
+            _re.I,
+        ):
             continue
         # A title-like line: 20-300 chars, contains meaningful words
-        if 20 < len(l) < 300 and any(w in l.lower() for w in
+        if 20 < len(line) < 300 and any(w in line.lower() for w in
            ["genomic","transcriptom","landscape","characteriz","sequenc","mutati","cancer",
             "tumor","tumour","invasion","pathway","single-cell","spatial","clinical","integrat",
             "molecular","expression","profiling","analysis","identifies","reveals","uncover"]):
             # Stop at citation-style lines (author list, volume/page)
-            if _re.search(r"\b(20\d{2})\b.*\d+[,–-]\d+|et al\.|\bVol\.?\s*\d+\b", l):
+            if _re.search(
+                r"\b(20\d{2})\b.*\d+[,–-]\d+|et al\.|\bVol\.?\s*\d+\b",
+                line,
+            ):
                 break
-            title_candidates.append(l)
+            title_candidates.append(line)
             if len(title_candidates) >= 3:
                 break
 
@@ -72,14 +90,14 @@ def extract_metadata_regex(pdf_text: str) -> dict:
         if doi_match:
             after_doi = pdf_text[doi_match.end():]
             title_lines = []
-            for l in after_doi.splitlines():
-                l = l.strip()
-                if not l:
+            for line in after_doi.splitlines():
+                line = line.strip()
+                if not line:
                     continue
-                if _re.search(r"[A-Z][a-z]+\d", l):
+                if _re.search(r"[A-Z][a-z]+\d", line):
                     break
-                if len(l) > 5:
-                    title_lines.append(l)
+                if len(line) > 5:
+                    title_lines.append(line)
                 if len(title_lines) >= 3:
                     break
             if title_lines:
@@ -87,11 +105,11 @@ def extract_metadata_regex(pdf_text: str) -> dict:
 
     # Strategy 3: any line that looks like a title
     if title == "Study Title Not Detected":
-        for l in pdf_text.splitlines():
-            l = l.strip()
-            if 20 < len(l) < 200 and any(w in l.lower() for w in
+        for line in pdf_text.splitlines():
+            line = line.strip()
+            if 20 < len(line) < 200 and any(w in line.lower() for w in
                ["genomic","transcriptom","landscape","characteriz","sequenc","mutati","cancer","tumor","tumour"]):
-                title = l
+                title = line
                 break
 
     # ── DOI ───────────────────────────────────────────────────────────────
@@ -137,22 +155,25 @@ def extract_metadata_regex(pdf_text: str) -> dict:
     author = ""
     if _doi_match_title:
         after_doi = pdf_text[_doi_match_title.end():]
-        for l in after_doi.splitlines():
-            l = l.strip()
-            if not l:
+        for line in after_doi.splitlines():
+            line = line.strip()
+            if not line:
                 continue
             # Pattern 1: "Firstname Surname[digit]" — e.g. "Feifei Xie1,10,"
-            am = _re.match(r"[A-Z][a-z]+\s+([A-Z][a-z]+)\d", l)
+            am = _re.match(r"[A-Z][a-z]+\s+([A-Z][a-z]+)\d", line)
             if am:
                 author = am.group(1)
                 break
             # Pattern 2: "Surname, Initials" style — "Smith J1,"
-            am2 = _re.match(r"([A-Z][a-z]{1,15}),\s*[A-Z]\.?\s*\d", l)
+            am2 = _re.match(
+                r"([A-Z][a-z]{1,15}),\s*[A-Z]\.?\s*\d",
+                line,
+            )
             if am2:
                 author = am2.group(1)
                 break
             # Stop if we've passed the author block (abstract/intro begins)
-            if len(l) > 150 or _re.match(r"[A-Z][a-z].{80,}", l):
+            if len(line) > 150 or _re.match(r"[A-Z][a-z].{80,}", line):
                 break
     # Fallback: "Surname et al." anywhere in text
     if not author:
@@ -325,4 +346,4 @@ def extract_metadata_regex(pdf_text: str) -> dict:
     }
 
 
-__all__ = ["extract_metadata_regex"]
+__all__ = ["extract_metadata_regex", "extract_pdf_text"]

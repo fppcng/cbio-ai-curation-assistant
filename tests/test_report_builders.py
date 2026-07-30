@@ -4,13 +4,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from cbio_curation_assistant.cli_shared import extract_xml_metadata_with_llm
 from cbio_curation_assistant.pdf_report import (
     build_curation_report_filename,
     build_curation_report_json,
     build_curation_report_pdf,
     save_curation_report_pdf,
 )
+from cbio_curation_assistant.publications import extract_xml_metadata_with_llm
 
 
 META = {

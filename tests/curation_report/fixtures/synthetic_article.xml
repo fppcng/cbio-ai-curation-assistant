@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<article>
+  <front>
+    <journal-meta>
+      <journal-title-group>
+        <journal-title>Journal of Characterization</journal-title>
+      </journal-title-group>
+    </journal-meta>
+    <article-meta>
+      <article-id pub-id-type="pmid">12345678</article-id>
+      <article-id pub-id-type="doi">10.1000/example</article-id>
+      <title-group>
+        <article-title>Genomic landscape of lung adenocarcinoma</article-title>
+      </title-group>
+      <contrib-group>
+        <contrib contrib-type="author" corresp="yes">
+          <name>
+            <surname>Smith</surname>
+            <given-names>Ada</given-names>
+          </name>
+          <email>curator@example.org</email>
+        </contrib>
+      </contrib-group>
+      <pub-date>
+        <year>2024</year>
+      </pub-date>
+      <abstract>
+        <p>We characterized the cohort. A second sentence follows.</p>
+      </abstract>
+    </article-meta>
+  </front>
+  <body>
+    <sec>
+      <p>Body evidence appears here.</p>
+    </sec>
+  </body>
+  <back>
+    <ref-list>
+      <ref>Unrelated cited paper.</ref>
+    </ref-list>
+  </back>
+</article>

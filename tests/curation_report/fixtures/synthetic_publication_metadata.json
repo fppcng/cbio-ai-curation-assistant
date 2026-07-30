@@ -1,0 +1,22 @@
+{
+  "study_title": "Genomic landscape of lung adenocarcinoma",
+  "cancer_type": null,
+  "cancer_type_full": null,
+  "num_samples": null,
+  "num_patients": null,
+  "reference_genome": null,
+  "sequencing_types": [],
+  "pmid": "12345678",
+  "doi": "10.1000/example",
+  "first_author_surname": "Smith",
+  "year": "2024",
+  "journal": "Journal of Characterization",
+  "study_id_suggestion": "study_smith_2024",
+  "description": "We characterized the cohort.",
+  "key_findings": [],
+  "primary_site": null,
+  "cohort_description": null,
+  "meta_description": "We characterized the cohort.",
+  "data_repositories": [],
+  "corresponding_authors": "Smith Ada, curator@example.org"
+}

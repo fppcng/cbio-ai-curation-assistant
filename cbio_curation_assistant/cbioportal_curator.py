@@ -22,10 +22,11 @@ from cbio_curation_assistant.cbioportal.classification import (
     ClassificationResult,
     classify_sheet,
 )
-from cbio_curation_assistant.llm import LLMConfig, complete_text, parse_llm_json
-from cbio_curation_assistant.pdf_metadata_regex import (
-    extract_metadata_regex as _extract_metadata_regex,
+from cbio_curation_assistant.publications.completion import (
+    PUBLICATION_METADATA_PROMPT as SYSTEM_PROMPT_CURATOR,
+    complete_pdf_metadata as _extract_metadata_llm,
 )
+from cbio_curation_assistant.publications.pdf import extract_pdf_text
 from cbio_curation_assistant.supplements.models import SupplementaryClassification
 from cbio_curation_assistant.supplements.readers import read_supplementary_file
 
@@ -44,71 +45,6 @@ CURABILITY = {
     "GENERIC_ASSAY": ("PARTIAL", "LOW"),
     "NOT_LOADABLE": ("NO", "N/A"),
 }
-
-SYSTEM_PROMPT_CURATOR = """
-You are an expert bioinformatics data curator specialising in the cBioPortal
-platform (https://docs.cbioportal.org/file-formats/).
-
-When given text extracted from a cancer genomics paper, extract the following
-study metadata and return it as a JSON object with exactly these keys:
-
-{
-  "study_title": "...",
-  "cancer_type": "...",           // short abbreviation e.g. brca, gist, luad
-  "cancer_type_full": "...",      // e.g. Breast Invasive Carcinoma
-  "num_samples": "...",           // integer or string
-  "num_patients": "...",          // integer or string
-  "reference_genome": "...",      // hg19 or hg38
-  "sequencing_types": ["..."],    // e.g. ["WES","WGS","WTS"]
-  "pmid": "...",                  // PubMed ID if mentioned
-  "doi": "...",                   // DOI string
-  "first_author_surname": "...",
-  "year": "...",
-  "journal": "...",
-  "study_id_suggestion": "...",   // snake_case e.g. gist_xie_2024
-  "description": "...",           // one sentence
-  "key_findings": ["..."],        // up to 5 bullet points
-  "primary_site": "...",          // anatomical site e.g. "Stomach and small intestine"
-  "cohort_description": "...",    // one sentence describing the cohort composition
-  "meta_description": "...",      // concise description for meta_study.txt (200 chars max)
-  "data_repositories": ["..."],   // GEO/GDC/SRA accession strings mentioned in paper
-  "corresponding_authors": "..."  // name and email of corresponding authors if mentioned
-}
-
-Return ONLY the JSON — no markdown fences, no extra text.
-"""
-
-
-def extract_pdf_text(pdf_path: str, max_pages: int = 12) -> str:
-    """Extract text from the leading pages of a paper PDF with pypdf."""
-    from pypdf import PdfReader
-
-    reader = PdfReader(pdf_path)
-    pages = reader.pages[:max_pages]
-    return "\n".join(page.extract_text() or "" for page in pages)
-
-
-def _extract_metadata_llm(pdf_text: str, llm_config: LLMConfig, temperature: float) -> dict[str, Any]:
-    _ = temperature
-    raw = complete_text(
-        config=llm_config,
-        system=SYSTEM_PROMPT_CURATOR,
-        user_content=pdf_text[:12000],
-        max_tokens=2000,
-    ).strip()
-    try:
-        llm_data = parse_llm_json(raw)
-    except Exception as exc:
-        logging.warning("LLM JSON parse failed (%s); using regex fallback.", exc)
-        llm_data = {}
-
-    fallback = _extract_metadata_regex(pdf_text)
-    merged = {**fallback}
-    for key, value in llm_data.items():
-        if value and value not in ("?", "...", "Unknown", "mixed", "study_2024", ""):
-            merged[key] = value
-    return merged
-
 
 def _build_report_record(
     cr: ClassificationResult,

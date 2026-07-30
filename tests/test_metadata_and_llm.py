@@ -1,53 +1,30 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
-from cbio_curation_assistant.metadata_merge import (
+from cbio_curation_assistant.publications import (
     build_study_id,
+    extract_metadata_from_xml,
+    extract_metadata_regex,
+    extract_xml_llm_text,
+    extract_xml_text,
     is_missing_metadata_value,
     merge_missing_metadata_fields,
 )
-from cbio_curation_assistant.pdf_metadata_regex import extract_metadata_regex
-from cbio_curation_assistant.xml_metadata import (
-    extract_metadata_from_xml,
-    extract_xml_llm_text,
-    extract_xml_text,
+
+
+JATS_FIXTURE = (
+    Path(__file__).resolve().parent
+    / "curation_report"
+    / "fixtures"
+    / "synthetic_article.xml"
 )
-
-
-JATS_XML = """
-<article>
-  <front>
-    <journal-meta>
-      <journal-title-group>
-        <journal-title>Journal of Characterization</journal-title>
-      </journal-title-group>
-    </journal-meta>
-    <article-meta>
-      <article-id pub-id-type="pmid">12345678</article-id>
-      <article-id pub-id-type="doi">10.1000/example</article-id>
-      <title-group>
-        <article-title>Genomic landscape of lung adenocarcinoma</article-title>
-      </title-group>
-      <contrib-group>
-        <contrib contrib-type="author" corresp="yes">
-          <name><surname>Smith</surname><given-names>Ada</given-names></name>
-          <email>ada@example.org</email>
-        </contrib>
-      </contrib-group>
-      <pub-date><year>2024</year></pub-date>
-      <abstract><p>We characterized the cohort. A second sentence follows.</p></abstract>
-    </article-meta>
-  </front>
-  <body><sec><p>Body evidence appears here.</p></sec></body>
-  <back><ref-list><ref>Unrelated cited paper.</ref></ref-list></back>
-</article>
-"""
 
 
 class XmlMetadataTest(unittest.TestCase):
     def test_structured_jats_metadata_is_extracted_without_an_llm(self) -> None:
-        metadata = extract_metadata_from_xml(JATS_XML)
+        metadata = extract_metadata_from_xml(JATS_FIXTURE)
 
         self.assertEqual(
             metadata["study_title"],
@@ -60,10 +37,13 @@ class XmlMetadataTest(unittest.TestCase):
         self.assertEqual(metadata["first_author_surname"], "Smith")
         self.assertEqual(metadata["description"], "We characterized the cohort.")
         self.assertEqual(metadata["study_id_suggestion"], "study_smith_2024")
-        self.assertIn("ada@example.org", metadata["corresponding_authors"])
+        self.assertIn(
+            "curator@example.org",
+            metadata["corresponding_authors"],
+        )
 
     def test_llm_text_excludes_back_matter(self) -> None:
-        text = extract_xml_llm_text(JATS_XML)
+        text = extract_xml_llm_text(JATS_FIXTURE)
 
         self.assertIn("Title\nGenomic landscape", text)
         self.assertIn("Abstract\nWe characterized", text)
@@ -71,7 +51,7 @@ class XmlMetadataTest(unittest.TestCase):
         self.assertNotIn("Unrelated cited paper", text)
 
     def test_general_xml_text_includes_back_matter(self) -> None:
-        text = extract_xml_text(JATS_XML)
+        text = extract_xml_text(JATS_FIXTURE)
         self.assertIn("Unrelated cited paper", text)
 
 

@@ -4,29 +4,7 @@ import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-
-METADATA_DEFAULTS = {
-    "study_title": None,
-    "cancer_type": None,
-    "cancer_type_full": None,
-    "num_samples": None,
-    "num_patients": None,
-    "reference_genome": None,
-    "sequencing_types": [],
-    "pmid": None,
-    "doi": None,
-    "first_author_surname": None,
-    "year": None,
-    "journal": None,
-    "study_id_suggestion": None,
-    "description": None,
-    "key_findings": [],
-    "primary_site": None,
-    "cohort_description": None,
-    "meta_description": None,
-    "data_repositories": [],
-    "corresponding_authors": None,
-}
+from cbio_curation_assistant.publications.models import PublicationMetadata
 
 
 def _xml_local_name(tag: str) -> str:
@@ -178,7 +156,6 @@ def _xml_corresponding_authors(root: ET.Element) -> str:
 
 
 def _parse_xml_root(xml_source: str | bytes | Path) -> ET.Element:
-    
     if isinstance(xml_source, bytes):
         return ET.fromstring(xml_source)
 
@@ -281,7 +258,7 @@ def extract_metadata_from_xml(xml_source: str | bytes | Path) -> dict:
     journal_meta = _journal_meta(article)
     article_scope = article_meta if article_meta is not None else article
     journal_scope = journal_meta if journal_meta is not None else article
-    meta = dict(METADATA_DEFAULTS)
+    meta = PublicationMetadata().to_dict()
 
     abstract = _xml_abstract(article_meta)
     description = _first_sentence(abstract)

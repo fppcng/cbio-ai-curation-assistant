@@ -68,6 +68,11 @@ class InstalledWheelSmokeTest(unittest.TestCase):
                 "cbio_curation_assistant/llm/parsing.py",
                 "cbio_curation_assistant/llm/providers.py",
                 "cbio_curation_assistant/llm/settings.py",
+                "cbio_curation_assistant/publications/completion.py",
+                "cbio_curation_assistant/publications/metadata.py",
+                "cbio_curation_assistant/publications/models.py",
+                "cbio_curation_assistant/publications/pdf.py",
+                "cbio_curation_assistant/publications/xml.py",
                 "cbio_curation_assistant/spec_fetcher.py",
                 "cbio_curation_assistant/spec_match.py",
                 "cbio_curation_assistant/supplements/formats.py",
@@ -75,6 +80,14 @@ class InstalledWheelSmokeTest(unittest.TestCase):
             ):
                 with self.subTest(module_path=module_path):
                     self.assertIn(module_path, names)
+            for obsolete_module_path in (
+                "cbio_curation_assistant/cli_shared.py",
+                "cbio_curation_assistant/metadata_merge.py",
+                "cbio_curation_assistant/pdf_metadata_regex.py",
+                "cbio_curation_assistant/xml_metadata.py",
+            ):
+                with self.subTest(obsolete_module_path=obsolete_module_path):
+                    self.assertNotIn(obsolete_module_path, names)
             self.assertIn(
                 "cbio_curation_assistant/resources/cbioportal/specification_provenance.json",
                 names,
