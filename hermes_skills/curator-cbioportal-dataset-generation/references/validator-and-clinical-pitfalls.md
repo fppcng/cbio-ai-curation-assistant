@@ -2,22 +2,18 @@
 
 ## Validator environment
 
-Run the validator through the stable package CLI and the project selected by `CBIO_CURATION_ASSISTANT_HOME`:
+Run the validator only through the stable package CLI:
 
 ```bash
 uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation validate-study \
   --study-id "<study_id>"
 ```
 
-If the validator is present but missing its pinned Python dependencies, install them into the same venv first:
-
-```bash
-./.venv/bin/pip install -r cbioportal_core_validator/requirements.txt
-```
-
-### Important caveat
-
-Those validator requirements can downgrade shared packages already present in the repo venv (for example `Jinja2`, `MarkupSafe`, `requests`, `PyYAML`). If you do this in a shared development venv, mention the package drift in your report so the next agent understands why unrelated tooling may behave differently afterward.
+The command creates or reuses `cbioportal_core_validator/.venv` from the
+validator lockfile. The first run can require package-index access. Never
+install validator requirements into the main project environment and do not
+fall back to direct script or `PYTHONPATH` invocation. Report environment
+bootstrap failures as blockers.
 
 ## Interpreting validator exit status
 

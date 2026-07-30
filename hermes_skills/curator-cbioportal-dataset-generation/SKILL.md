@@ -53,9 +53,10 @@ uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation workspace describ
 uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation validate-study \
   --study-id "<study_id>"
 ```
+  - The command runs the bundled validator in its locked, isolated environment.
   - Interpret validator results carefully: a warning-only run may return a non-zero exit code, so use the validator summary text as well as the exit status.
   - Do not claim successful validation unless the validator output has been reviewed.
-  - If the validator cannot be executed, report the blocker explicitly.
+  - If environment preparation or validator execution fails, report the blocker explicitly. Do not install validator dependencies into the main project environment or invoke the validator script directly.
 12. Report the final outcome to the user.
   - List the generated files.
   - List omitted or unsupported files.
@@ -63,15 +64,6 @@ uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation validate-study \
   - Distinguish source-supported values from inferred decisions.
   - Distinguish generated outputs from successfully validated outputs.
   - State clearly whether the study is complete, partial, or invalid.
-
-## How to run the cBioPortal validator
-Run the validator through the package CLI and the project selected by `CBIO_CURATION_ASSISTANT_HOME`:
-```bash
-uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation validate-study \
-  --study-id "<study_id>"
-```
-If the validator environment is missing dependencies, report the missing dependency or environment issue to the user instead of claiming validation succeeded.
-Interpret validator results carefully: a warning-only run may return a non-zero exit code, so use the validator summary text as well as the exit status before deciding whether validation failed (look at `references/validator-and-clinical-pitfalls.md`)
 
 ## Output expectations
 - The workflow should produce:

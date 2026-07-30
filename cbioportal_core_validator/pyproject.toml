@@ -1,0 +1,15 @@
+[project]
+name = "cbioportal-core-validator-runtime"
+version = "0.1.0"
+description = "Isolated runtime for the bundled cBioPortal core validator."
+requires-python = ">=3.12"
+dependencies = [
+    "Jinja2==2.11.3",
+    "MarkupSafe==2.0.1",
+    "PyYAML==6.0.1",
+    "dsnparse==0.1.15",
+    "requests==2.32.3",
+]
+
+[tool.uv]
+package = false

@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import os
 import runpy
+import shutil
+import subprocess
 import sys
 from collections.abc import Sequence
 from contextlib import contextmanager
@@ -125,10 +127,30 @@ def _build_validate_parser() -> argparse.ArgumentParser:
 
 def _run_validate_study(script_args: Sequence[str]) -> int:
     args = _build_validate_parser().parse_args(script_args)
-    workspace = StudyWorkspace.from_study_id(args.study_id, assistant_home=_assistant_home())
+    assistant_home = _assistant_home()
+    workspace = StudyWorkspace.from_study_id(
+        args.study_id,
+        assistant_home=assistant_home,
+    )
+    validator_root = assistant_home / "cbioportal_core_validator"
+    validator_project = validator_root / "pyproject.toml"
+    script_path = validator_root / "scripts/importer/validateData.py"
+    if not validator_project.is_file():
+        raise FileNotFoundError(
+            f"cBioPortal validator project not found: {validator_project}"
+        )
+    if not script_path.is_file():
+        raise FileNotFoundError(f"cBioPortal validator not found: {script_path}")
+
+    uv_executable = shutil.which("uv")
+    if uv_executable is None:
+        raise RuntimeError(
+            "The uv executable is required to run the isolated cBioPortal "
+            "validator environment."
+        )
+
     validation_dir = workspace.root / "validation"
     validation_dir.mkdir(parents=True, exist_ok=True)
-
     validator_args = [
         "-s",
         str(workspace.curated_dir),
@@ -144,11 +166,26 @@ def _run_validate_study(script_args: Sequence[str]) -> int:
     if args.strict_maf_checks:
         validator_args.append("--strict_maf_checks")
 
-    script_path = _assistant_home() / "cbioportal_core_validator/scripts/importer/validateData.py"
-    if not script_path.is_file():
-        raise FileNotFoundError(f"cBioPortal validator not found: {script_path}")
-
-    return _run_external_script(script_path, validator_args)
+    validator_environment = os.environ.copy()
+    validator_environment.pop("VIRTUAL_ENV", None)
+    completed = subprocess.run(
+        [
+            uv_executable,
+            "run",
+            "--project",
+            str(validator_root),
+            "--frozen",
+            "--python",
+            sys.executable,
+            "python",
+            str(script_path),
+            *validator_args,
+        ],
+        cwd=validator_root,
+        env=validator_environment,
+        check=False,
+    )
+    return completed.returncode
 
 
 def _build_workspace_parser() -> argparse.ArgumentParser:
