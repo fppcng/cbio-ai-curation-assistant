@@ -10,14 +10,13 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from cbio_curation_assistant import study_download_cli
 from cbio_curation_assistant.integrations.pmc import PMCErrorClassification
 from cbio_curation_assistant.workspace import StudyWorkspace
+from cbio_curation_assistant.workflows import study_download as study_download_workflow
 from tests.script_loader import load_script_module
 
 
-DOWNLOAD_SCRIPT = (
-    "hermes_skills/abstractor-study-download/scripts/abstractor_study_download.py"
-)
 REPORT_SCRIPT = (
     "hermes_skills/abstractor-curation-report-generation/scripts/"
     "abstractor_report_generator.py"
@@ -28,13 +27,6 @@ GENOME_NEXUS_SCRIPT = (
 
 
 class StudyDownloadWorkflowTest(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.workflow = load_script_module(
-            "study_download_characterization",
-            DOWNLOAD_SCRIPT,
-        )
-
     def test_successful_download_initializes_workspace_and_persists_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             home = Path(tmp_dir)
@@ -54,28 +46,32 @@ class StudyDownloadWorkflowTest(unittest.TestCase):
 
             with (
                 patch.object(
-                    self.workflow,
+                    study_download_workflow,
                     "_resolve_download_identifier",
-                    return_value=self.workflow.ResolvedStudyIdentifier(
+                    return_value=study_download_workflow.ResolvedStudyIdentifier(
                         input_identifier="PMC123",
                         identifier_type="PMCID",
                         normalized_identifier="PMC123",
                         pmcid="PMC123",
                     ),
                 ),
-                patch.object(self.workflow, "_ensure_xml", side_effect=ensure_xml),
                 patch.object(
-                    self.workflow,
+                    study_download_workflow,
+                    "_ensure_xml",
+                    side_effect=ensure_xml,
+                ),
+                patch.object(
+                    study_download_workflow,
                     "_ensure_supplementary_files",
                     side_effect=ensure_supplements,
                 ),
                 patch.object(
-                    self.workflow,
+                    study_download_workflow,
                     "_ensure_article_pdf",
                     return_value=(None, False),
                 ),
             ):
-                result = self.workflow.run_study_download(
+                result = study_download_workflow.run_study_download(
                     identifier="PMC123",
                     identifier_type="pmcid",
                     assistant_home=home,
@@ -92,7 +88,7 @@ class StudyDownloadWorkflowTest(unittest.TestCase):
         self.assertEqual(persisted, result.to_manifest_dict())
 
     def test_main_renders_pmc_errors_as_json(self) -> None:
-        error = self.workflow.PMCRequestError(
+        error = study_download_cli.PMCRequestError(
             operation="download",
             classification=PMCErrorClassification(
                 category="remote_not_found",
@@ -108,12 +104,16 @@ class StudyDownloadWorkflowTest(unittest.TestCase):
             log_level="INFO",
         )
         with (
-            patch.object(self.workflow, "_build_parser") as parser,
-            patch.object(self.workflow, "run_study_download", side_effect=error),
+            patch.object(study_download_cli, "_build_parser") as parser,
+            patch.object(
+                study_download_cli,
+                "run_study_download",
+                side_effect=error,
+            ),
             contextlib.redirect_stdout(stdout),
         ):
             parser.return_value.parse_args.return_value = args
-            code = self.workflow.main([])
+            code = study_download_cli.run_study_download_command([])
 
         payload = json.loads(stdout.getvalue())
         self.assertEqual(code, 1)
@@ -134,16 +134,16 @@ class StudyDownloadWorkflowTest(unittest.TestCase):
             log_level="INFO",
         )
         with (
-            patch.object(self.workflow, "_build_parser") as parser,
+            patch.object(study_download_cli, "_build_parser") as parser,
             patch.object(
-                self.workflow,
+                study_download_cli,
                 "run_study_download",
                 return_value=download_result,
             ),
             contextlib.redirect_stdout(stdout),
         ):
             parser.return_value.parse_args.return_value = args
-            code = self.workflow.main([])
+            code = study_download_cli.run_study_download_command([])
 
         payload = json.loads(stdout.getvalue())
         self.assertEqual(code, 3)

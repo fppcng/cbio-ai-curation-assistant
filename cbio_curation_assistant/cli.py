@@ -31,13 +31,13 @@ from cbio_curation_assistant.workspace import (
 
 
 _SCRIPT_COMMANDS: dict[str, str] = {
-    "study-download": "hermes_skills/abstractor-study-download/scripts/abstractor_study_download.py",
     "curation-report": "hermes_skills/abstractor-curation-report-generation/scripts/abstractor_report_generator.py",
     "genome-nexus": "hermes_skills/curator-mutation-data-file-creation/scripts/run_genome_nexus.py",
 }
 _DIRECT_COMMANDS = (
     "clinical-dictionary",
     "oncotree-search",
+    "study-download",
     "validate-study",
     "workspace",
 )
@@ -233,6 +233,14 @@ def _run_workspace(script_args: Sequence[str]) -> int:
     raise ValueError(f"Unsupported workspace command: {args.workspace_command}")
 
 
+def _run_study_download(script_args: Sequence[str]) -> int:
+    from cbio_curation_assistant.study_download_cli import (
+        run_study_download_command,
+    )
+
+    return run_study_download_command(script_args)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -246,6 +254,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _run_validate_study(args.args)
         if args.command == "workspace":
             return _run_workspace(args.args)
+        if args.command == "study-download":
+            return _run_study_download(args.args)
         if args.command == "clinical-dictionary":
             return run_clinical_dictionary_command(args.args)
         if args.command == "oncotree-search":

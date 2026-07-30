@@ -43,6 +43,7 @@ from cbio_curation_assistant.integrations.pmc.models import (
     PMCErrorClassification,
     PMCRequestError,
     ResolvedStudyIdentifier,
+    format_pmc_error,
 )
 
 __all__ = [
@@ -69,6 +70,7 @@ __all__ = [
     "discover_supplement_urls_from_xml",
     "fetch_pmc_article_html",
     "fetch_pmc_xml",
+    "format_pmc_error",
     "extract_supported_files",
     "is_archive",
     "is_supported_file",

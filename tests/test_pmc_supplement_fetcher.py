@@ -47,6 +47,19 @@ class PmcPublicApiTest(unittest.TestCase):
         converter.assert_called_once_with("456")
         self.assertEqual(resolved.to_dict()["pmcid"], "PMC789")
 
+    def test_public_identifier_resolution_accepts_an_explicit_type(self) -> None:
+        converter = Mock(return_value="PMC789")
+
+        resolved = public_pmc.resolve_study_identifier_to_pmcid(
+            "456",
+            identifier_type="pmid",
+            pmid_resolver=converter,
+        )
+
+        converter.assert_called_once_with("456")
+        self.assertEqual(resolved.identifier_type, "PMID")
+        self.assertEqual(resolved.to_dict()["pmcid"], "PMC789")
+
     def test_public_discovery_api_matches_the_legacy_facade(self) -> None:
         xml = """
         <article xmlns:xlink="http://www.w3.org/1999/xlink">

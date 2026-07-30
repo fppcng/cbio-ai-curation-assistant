@@ -27,6 +27,24 @@ class CliDispatchTest(unittest.TestCase):
                 self.assertEqual(code, 7)
                 run_script.assert_called_once_with(command, ["--example", "value"])
 
+    def test_study_download_uses_direct_package_dispatch(self) -> None:
+        self.assertNotIn("study-download", cli._SCRIPT_COMMANDS)
+        with patch.object(cli, "_run_study_download", return_value=7) as download:
+            code = cli.main(
+                [
+                    "study-download",
+                    "--identifier",
+                    "PMC123",
+                    "--identifier-type",
+                    "pmcid",
+                ]
+            )
+
+        self.assertEqual(code, 7)
+        download.assert_called_once_with(
+            ["--identifier", "PMC123", "--identifier-type", "pmcid"]
+        )
+
     def test_validate_command_uses_dedicated_dispatch(self) -> None:
         with patch.object(cli, "_run_validate_study", return_value=3) as validate:
             code = cli.main(["validate-study", "--study-id", "pmc1"])
@@ -44,7 +62,11 @@ class CliDispatchTest(unittest.TestCase):
     def test_unexpected_command_failure_is_rendered_as_json(self) -> None:
         stdout = io.StringIO()
         stderr = io.StringIO()
-        with patch.object(cli, "_run_script", side_effect=RuntimeError("broken")):
+        with patch.object(
+            cli,
+            "_run_study_download",
+            side_effect=RuntimeError("broken"),
+        ):
             with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
                 code = cli.main(["study-download"])
 

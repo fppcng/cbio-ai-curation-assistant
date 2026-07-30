@@ -39,21 +39,34 @@ def pmcid_numeric(pmcid: str) -> str:
 def resolve_study_identifier_to_pmcid(
     identifier: str,
     *,
+    identifier_type: str | None = None,
     pmid_resolver: Callable[[str], str] | None = None,
 ) -> ResolvedStudyIdentifier:
-    """Resolve a user-supplied PMID or PMCID to a normalized PMCID."""
+    """Resolve a user-supplied PMID or PMCID to a normalized PMCID.
+
+    When ``identifier_type`` is provided, the caller has already established
+    whether an otherwise ambiguous value such as ``"123456"`` is a PMID or
+    PMCID. Without it, the identifier must include an explicit ``PMID`` or
+    ``PMC`` prefix.
+    """
     value = (identifier or "").strip()
-    identifier_type = detect_pubmed_identifier_type(value)
-    if identifier_type == "PMCID":
+    resolved_type = (
+        identifier_type.strip().upper()
+        if identifier_type is not None
+        else detect_pubmed_identifier_type(value)
+    )
+    if resolved_type == "PMCID":
         normalized_identifier = normalize_pmcid(value)
         return ResolvedStudyIdentifier(
             input_identifier=value,
-            identifier_type=identifier_type,
+            identifier_type="PMCID",
             normalized_identifier=normalized_identifier,
             pmcid=normalized_identifier,
         )
-    if identifier_type == "PMID":
+    if resolved_type == "PMID":
         normalized_identifier = re.sub(r"\D", "", value)
+        if not normalized_identifier:
+            raise ValueError("PMID must contain digits.")
         if pmid_resolver is None:
             from cbio_curation_assistant.integrations.pmc.client import (
                 pmid_to_pmcid,
@@ -62,10 +75,12 @@ def resolve_study_identifier_to_pmcid(
             pmid_resolver = pmid_to_pmcid
         return ResolvedStudyIdentifier(
             input_identifier=value,
-            identifier_type=identifier_type,
+            identifier_type="PMID",
             normalized_identifier=normalized_identifier,
             pmcid=pmid_resolver(normalized_identifier),
         )
+    if identifier_type is not None:
+        raise ValueError("identifier_type must be either 'pmid' or 'pmcid'.")
     raise ValueError(
         "Identifier must be a numeric PMID or a PMCID such as PMC123456."
     )

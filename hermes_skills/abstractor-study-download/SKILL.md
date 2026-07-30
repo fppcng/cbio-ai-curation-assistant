@@ -13,7 +13,7 @@ Use this skill when the user asks to download study artifacts for a paper identi
 
 ## Core rules
 - Treat the returned `result.study_id` as the only stable handoff to downstream steps.
-- Use the download report JSON printed by the script as the source of truth for status, resolved identifiers, artifacts, warnings, and reuse details.
+- Use the download report JSON printed by the package command as the source of truth for status, resolved identifiers, artifacts, warnings, and reuse details.
 - After a successful or partial download, use `cbio-curation workspace describe --study-id <study_id>` when you need canonical workspace paths.
 - Do not infer workspace paths from repository layout or construct them manually in agent reasoning.
 
@@ -34,8 +34,8 @@ uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation workspace describ
 ```
 6. Use the workspace discovery envelope under `result` only for paths; use the download report for what was downloaded, reused, missing, or warned.
 
-## What the script owns
-The script deterministically handles:
+## What the package workflow owns
+The `cbio-curation study-download` workflow deterministically handles:
 - PMID/PMCID normalization and PMID-to-PMCID resolution
 - canonical storage-root resolution from `CBIO_CURATION_ASSISTANT_HOME`
 - workspace initialization through the shared workspace module
@@ -47,10 +47,12 @@ The script deterministically handles:
 - printing the deterministic download report JSON to stdout
 - structured error payloads for deterministic agent recovery
 
-Do not restate those implementation details in agent reasoning unless they are directly relevant to a failure or debugging step.
+The skill does not implement the workflow and must not invoke a skill-local
+script. Do not restate those implementation details in agent reasoning unless
+they are directly relevant to a failure or debugging step.
 
 ## Reporting requirements
-Base the user-facing summary on the deterministic download report printed by the script:
+Base the user-facing summary on the deterministic download report printed by the package command:
 - `result.resolved_identifier` for the input identifier, normalized identifier, PMID, and PMCID.
 - `result.study_id` for the stable downstream handoff.
 - `status` for whether the run succeeded or partially succeeded. Reuse is a successful result, not a separate status.

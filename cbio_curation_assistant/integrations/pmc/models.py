@@ -60,8 +60,16 @@ class PMCRequestError(RuntimeError):
         super().__init__(f"{operation} failed [{self.category}]: {detail}")
 
 
+def format_pmc_error(error: PMCRequestError) -> str:
+    """Render a stable human-readable detail for agent-facing errors."""
+    if error.status_code is not None:
+        return f"{error.category} (HTTP {error.status_code}): {error.detail}"
+    return f"{error.category}: {error.detail}"
+
+
 __all__ = [
     "DownloadedSupplement",
+    "format_pmc_error",
     "PMCErrorClassification",
     "PMCRequestError",
     "ResolvedStudyIdentifier",

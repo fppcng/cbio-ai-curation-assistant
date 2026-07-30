@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import subprocess
+import sysconfig
 import tempfile
 import unittest
 import zipfile
@@ -83,8 +84,10 @@ class InstalledWheelSmokeTest(unittest.TestCase):
                 "cbio_curation_assistant/publications/xml.py",
                 "cbio_curation_assistant/spec_fetcher.py",
                 "cbio_curation_assistant/spec_match.py",
+                "cbio_curation_assistant/study_download_cli.py",
                 "cbio_curation_assistant/supplements/formats.py",
                 "cbio_curation_assistant/supplements/readers.py",
+                "cbio_curation_assistant/workflows/study_download.py",
             ):
                 with self.subTest(module_path=module_path):
                     self.assertIn(module_path, names)
@@ -153,6 +156,28 @@ class InstalledWheelSmokeTest(unittest.TestCase):
             )
             self.assertEqual(install.returncode, 0, install.stderr or install.stdout)
 
+            command = environment_dir / "bin" / "cbio-curation"
+            help_environment = os.environ.copy()
+            help_environment["PYTHONPATH"] = sysconfig.get_paths()["purelib"]
+            study_download_help = subprocess.run(
+                [str(command), "study-download", "--help"],
+                cwd=root,
+                env=help_environment,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            self.assertEqual(
+                study_download_help.returncode,
+                0,
+                study_download_help.stderr,
+            )
+            self.assertIn(
+                "cbio-curation study-download",
+                study_download_help.stdout,
+            )
+
             llm_import = subprocess.run(
                 [
                     str(python),
@@ -184,7 +209,6 @@ class InstalledWheelSmokeTest(unittest.TestCase):
             workspace.initialize()
             environment = os.environ.copy()
             environment[ENV_VAR_NAME] = str(workspace_home)
-            command = environment_dir / "bin" / "cbio-curation"
             completed = subprocess.run(
                 [
                     str(command),
