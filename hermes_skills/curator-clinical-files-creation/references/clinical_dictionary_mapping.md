@@ -2,8 +2,13 @@
 
 ## Batch search input
 
-Use one query per clinical source field considered for output and per required
-or derived output field:
+Inspect every non-empty column in the selected source sheets. Use its values,
+row granularity, annotations, and study context to decide whether it contains
+patient- or sample-level clinical information. Do not assume that every column
+or every sheet is clinical.
+
+Use one query per source field determined to be clinically relevant and per
+required or derived output field:
 
 ```json
 {
@@ -69,8 +74,19 @@ For a custom mapping:
 }
 ```
 
-Use `status: excluded` with a non-empty `reason` for a reviewed clinical field
-that should not be emitted.
+Use a custom STRING attribute when no standard attribute preserves the source
+meaning. Set `target_files` to `patient` when the value describes the person,
+diagnosis, or patient-level clinical course and is invariant across that
+patient's samples. Set it to `sample` when it describes a tumor, specimen,
+biopsy, or sample-level analysis, or may vary between samples from the same
+patient.
+
+Do not drop a field after determining that it contains clinical information.
+Use `status: excluded` with a non-empty `reason` only as a last resort when
+subsequent inspection shows that the field is administrative noise, duplicates
+an emitted field without adding information, or cannot be preserved safely
+even as STRING. The absence of a suitable dictionary term is not a reason for
+exclusion.
 
 Standard mappings must use the selected dictionary display name, description,
 datatype, priority, and patient/sample placement. When a documented cBioPortal
