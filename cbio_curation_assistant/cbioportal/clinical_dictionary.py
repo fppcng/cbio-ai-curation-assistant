@@ -13,13 +13,11 @@ from pathlib import Path
 from typing import Any
 
 
-DEFAULT_LIMIT = 10
+DEFAULT_LIMIT = 5
 DEFAULT_MINIMUM_SCORE = 0.2
 TOKEN_MATCH_WEIGHT = 0.55
 STRING_MATCH_WEIGHT = 0.45
-CLINICAL_DICTIONARY_RESOURCE_PACKAGE = (
-    "cbio_curation_assistant.resources.clinical"
-)
+CLINICAL_DICTIONARY_RESOURCE_PACKAGE = "cbio_curation_assistant.resources.clinical"
 CLINICAL_DICTIONARY_SNAPSHOT_NAME = "clinical_dictionary_snapshot.json"
 CLINICAL_DICTIONARY_PROVENANCE_NAME = "provenance.json"
 
@@ -114,9 +112,7 @@ class ClinicalDictionaryProvenance:
             sha256=str(values["sha256"]),
             transformations=tuple(str(item) for item in values["transformations"]),
             license=(
-                str(values["license"])
-                if values.get("license") is not None
-                else None
+                str(values["license"]) if values.get("license") is not None else None
             ),
             provenance_notes=str(values["provenance_notes"]),
         )
@@ -220,61 +216,68 @@ def _attribute_search_text(attribute: ClinicalDictionaryAttribute) -> str:
     )
 
 
-def score_clinical_dictionary_candidate(
+def _score_query_text(
     query_text: str,
     candidate: ClinicalDictionaryAttribute,
-    considered_column_name: str,
 ) -> float:
-    """Score a dictionary attribute as a possible standard mapping."""
+    """Score one neutral source-derived query against a dictionary attribute."""
     normalized_query = _normalize_text(query_text)
-    candidate_text = _attribute_search_text(candidate)
-    normalized_candidate = _normalize_text(candidate_text)
-    normalized_header = _normalize_text(candidate.column_header)
-    normalized_considered = _normalize_text(considered_column_name)
+    if not normalized_query:
+        return 0.0
 
+    candidate_text = _attribute_search_text(candidate)
     query_tokens = _tokenize(query_text)
     candidate_tokens = _tokenize(candidate_text)
-    token_score = 0.0
-    if query_tokens:
-        token_score = len(query_tokens & candidate_tokens) / len(query_tokens)
+    token_score = len(query_tokens & candidate_tokens) / len(query_tokens)
 
-    string_score = SequenceMatcher(
-        None,
-        normalized_query,
-        normalized_candidate,
-    ).ratio()
-    header_score = SequenceMatcher(
-        None,
-        normalized_considered,
-        normalized_header,
-    ).ratio()
-
-    if normalized_considered and normalized_considered == normalized_header:
-        return 1.0
-
-    return max(
-        (TOKEN_MATCH_WEIGHT * token_score) + (STRING_MATCH_WEIGHT * string_score),
-        header_score,
+    candidate_fields = (
+        candidate.column_header,
+        candidate.display_name,
+        candidate.description,
     )
+    string_score = max(
+        SequenceMatcher(
+            None,
+            normalized_query,
+            _normalize_text(candidate_field),
+        ).ratio()
+        for candidate_field in candidate_fields
+    )
+    return (TOKEN_MATCH_WEIGHT * token_score) + (STRING_MATCH_WEIGHT * string_score)
+
+
+def score_clinical_dictionary_candidate(
+    source_column_name: str,
+    candidate: ClinicalDictionaryAttribute,
+    search_query: str | None = None,
+) -> float:
+    """Score an attribute using the source header and optional neutral query.
+
+    ``search_query`` is a source-derived reformulation, not a proposed
+    cBioPortal header. When present, it replaces the source header as the
+    retrieval query so an abbreviation cannot dominate its clarified meaning.
+    The original source header remains available in the mapping report.
+    """
+    query_text = search_query if search_query else source_column_name
+    return _score_query_text(query_text, candidate)
 
 
 def search_clinical_dictionary(
-    original_column_name: str,
-    considered_column_name: str,
+    source_column_name: str,
     dictionary: list[ClinicalDictionaryAttribute],
+    search_query: str | None = None,
     limit: int = DEFAULT_LIMIT,
     minimum_score: float = DEFAULT_MINIMUM_SCORE,
 ) -> list[ClinicalDictionaryMatch]:
     """Return ranked standard-attribute candidates for a source column."""
-    query_text = f"{original_column_name} {considered_column_name}"
     matches = [
         ClinicalDictionaryMatch(attribute=attribute, score=round(score, 4))
         for attribute in dictionary
         if (
             score := score_clinical_dictionary_candidate(
-                query_text=query_text,
+                source_column_name=source_column_name,
                 candidate=attribute,
-                considered_column_name=considered_column_name,
+                search_query=search_query,
             )
         )
         >= minimum_score

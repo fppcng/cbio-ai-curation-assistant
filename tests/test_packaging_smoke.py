@@ -212,10 +212,11 @@ class InstalledWheelSmokeTest(unittest.TestCase):
                 [
                     str(command),
                     "clinical-dictionary",
+                    "search",
                     "--source-column",
                     "patient age",
-                    "--considered-column",
-                    "AGE",
+                    "--search-query",
+                    "age at diagnosis",
                     "--limit",
                     "1",
                     "--json",
@@ -234,8 +235,10 @@ class InstalledWheelSmokeTest(unittest.TestCase):
             dictionary_payload = json.loads(clinical_dictionary.stdout)
             self.assertEqual(dictionary_payload["status"], "success")
             self.assertEqual(
-                dictionary_payload["result"][0]["column_header"],
-                "AGE",
+                dictionary_payload["result"]["report"]["mappings"][0]["candidates"][0][
+                    "column_header"
+                ],
+                "AGE_AT_DIAGNOSIS",
             )
 
 

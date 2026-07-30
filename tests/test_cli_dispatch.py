@@ -80,10 +80,11 @@ class CliDispatchTest(unittest.TestCase):
             code = cli.main(
                 [
                     "clinical-dictionary",
+                    "search",
                     "--source-column",
                     "survival",
-                    "--considered-column",
-                    "OS_MONTHS",
+                    "--search-query",
+                    "overall survival months",
                     "--json",
                 ]
             )
@@ -91,10 +92,11 @@ class CliDispatchTest(unittest.TestCase):
         self.assertEqual(code, 7)
         run.assert_called_once_with(
             [
+                "search",
                 "--source-column",
                 "survival",
-                "--considered-column",
-                "OS_MONTHS",
+                "--search-query",
+                "overall survival months",
                 "--json",
             ]
         )

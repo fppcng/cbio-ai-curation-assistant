@@ -22,24 +22,29 @@ uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation workspace describ
   - sheet, table, and column names.
 6. Read the selected supplementary files directly from the discovered source/supplementary paths to determine their actual contents and whether they support generation of the clinical files. Do not decide that a file can or cannot be used based only on the abstractor report, filenames, or sheet names.
 7. When the source is an Excel workbook, inspect any cell comments, notes, or annotations that are present. Treat them as potentially important source context for interpreting headers, values, exclusions, or sheet-level meaning.
-8. For every clinical column found in the source files, run the package CLI through the project selected by `CBIO_CURATION_ASSISTANT_HOME` using the source column name:
+8. Follow `references/clinical_dictionary_mapping.md`. Create one batch query for every clinical source column considered for output and every required or derived output column. Preserve the original header; an optional `search_query` may clarify its meaning but must not propose a cBioPortal header. Run:
 ```bash
-uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation clinical-dictionary \
-  --source-column "<source_column_name>" \
-  --considered-column "<candidate_cbioportal_column>" \
+uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation clinical-dictionary search \
+  --input "<clinical_dictionary_queries.json>" \
+  --limit 5 \
+  --output "<result.workspace.reports>/clinical_dictionary_mapping.json" \
   --json
 ```
-Check that the envelope has `status: success`, then review the candidates under `result` to determine:
-  - the standard cBioPortal column header;
-  - whether the attribute belongs in `data_clinical_sample.txt` or `data_clinical_patient.txt`;
-  - the datatype, display name, and description.
-Select a candidate only when its meaning matches the source attribute. Do not choose a result based only on name similarity. If no candidate preserves the source meaning, create an appropriate custom attribute.
+Review all candidates and complete every report decision. Choose by meaning, not score alone. Standard mappings use the selected dictionary header, metadata, and `attribute_type` placement; otherwise record a justified custom or excluded decision.
 9. Generate clinical files under `result.workspace.curated`:
   - `meta_clinical_sample.txt`;
   - `data_clinical_sample.txt`;
   - `meta_clinical_patient.txt`, only when patient-level data is available.
   - `data_clinical_patient.txt`, only when patient-level data is available.
-10. Ensure identifiers are consistent, attributes are placed at the correct level, and no unsupported mappings or transformations are introduced.
+10. Validate the completed report against the generated files:
+```bash
+uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation clinical-dictionary validate \
+  --report "<result.workspace.reports>/clinical_dictionary_mapping.json" \
+  --sample-file "<result.workspace.curated>/data_clinical_sample.txt" \
+  --patient-file "<result.workspace.curated>/data_clinical_patient.txt" \
+  --json
+```
+Omit `--patient-file` when no patient file exists. Do not finish until validation returns `status: success`.
 
 ## SOMATIC_STATUS Column
 - `SOMATIC_STATUS` must be included in `data_clinical_sample.txt` and assigned to each tumor sample.
