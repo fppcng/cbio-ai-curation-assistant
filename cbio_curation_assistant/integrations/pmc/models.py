@@ -6,6 +6,13 @@ from dataclasses import dataclass
 from typing import Literal
 
 
+@dataclass
+class DownloadedSupplement:
+    path: str
+    filename: str
+    source_url: str
+
+
 @dataclass(frozen=True)
 class ResolvedStudyIdentifier:
     input_identifier: str
@@ -54,6 +61,7 @@ class PMCRequestError(RuntimeError):
 
 
 __all__ = [
+    "DownloadedSupplement",
     "PMCErrorClassification",
     "PMCRequestError",
     "ResolvedStudyIdentifier",

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import tempfile
 import unittest
 import zipfile
@@ -10,6 +11,12 @@ import requests
 
 from cbio_curation_assistant import pmc_supplement_fetcher as pmc
 from cbio_curation_assistant.integrations import pmc as public_pmc
+from cbio_curation_assistant.integrations.pmc import archives as pmc_archives
+from cbio_curation_assistant.integrations.pmc import client as pmc_client
+from cbio_curation_assistant.integrations.pmc import downloads as pmc_downloads
+from cbio_curation_assistant.integrations.pmc import (
+    proof_of_work as pmc_proof_of_work,
+)
 
 
 class PmcPublicApiTest(unittest.TestCase):
@@ -22,6 +29,10 @@ class PmcPublicApiTest(unittest.TestCase):
             public_pmc.ResolvedStudyIdentifier,
         )
         self.assertIs(pmc.normalize_pmcid, public_pmc.normalize_pmcid)
+        self.assertIs(
+            pmc.download_pmc_supplements,
+            public_pmc.download_pmc_supplements,
+        )
 
     def test_public_identifier_resolution_accepts_an_injected_pmid_resolver(
         self,
@@ -107,7 +118,9 @@ class PmcErrorAndRetryTest(unittest.TestCase):
         }
         for status_code, expected in cases.items():
             with self.subTest(status_code=status_code):
-                classification = pmc._classify_pmc_error(self.http_error(status_code))
+                classification = pmc_client.classify_pmc_error(
+                    self.http_error(status_code)
+                )
                 self.assertEqual(
                     (classification.category, classification.retryable),
                     expected,
@@ -123,7 +136,9 @@ class PmcErrorAndRetryTest(unittest.TestCase):
         }
         for message, expected in cases.items():
             with self.subTest(message=message):
-                classification = pmc._classify_pmc_error(ValueError(message))
+                classification = pmc_client.classify_pmc_error(
+                    ValueError(message)
+                )
                 self.assertEqual(
                     (classification.category, classification.retryable),
                     expected,
@@ -137,8 +152,8 @@ class PmcErrorAndRetryTest(unittest.TestCase):
                 "ok",
             ]
         )
-        with patch.object(pmc.time, "sleep") as sleep:
-            result = pmc._run_with_pmc_retry(
+        with patch.object(pmc_client.time, "sleep") as sleep:
+            result = pmc_client.run_with_pmc_retry(
                 operation="test",
                 request_fn=request,
                 attempts=3,
@@ -151,9 +166,9 @@ class PmcErrorAndRetryTest(unittest.TestCase):
 
     def test_retry_stops_immediately_for_non_retryable_failure(self) -> None:
         request = Mock(side_effect=ValueError("PMID must contain digits."))
-        with patch.object(pmc.time, "sleep") as sleep:
+        with patch.object(pmc_client.time, "sleep") as sleep:
             with self.assertRaises(pmc.PMCRequestError) as raised:
-                pmc._run_with_pmc_retry(
+                pmc_client.run_with_pmc_retry(
                     operation="test",
                     request_fn=request,
                     attempts=3,
@@ -181,7 +196,7 @@ class PmcTransportAndDiscoveryTest(unittest.TestCase):
         """
 
         self.assertEqual(
-            pmc._supplement_urls("PMC123", xml),
+            public_pmc.discover_supplement_urls_from_xml("PMC123", xml),
             [
                 "https://pmc.ncbi.nlm.nih.gov/articles/instance/123/bin/table.xlsx",
                 "https://pmc.ncbi.nlm.nih.gov/articles/PMC123/supp/nested.csv",
@@ -202,7 +217,7 @@ class PmcTransportAndDiscoveryTest(unittest.TestCase):
         """
 
         self.assertEqual(
-            pmc._supplement_urls_from_article_html("PMC123", html),
+            public_pmc.discover_supplement_urls_from_html("PMC123", html),
             [
                 "https://pmc.ncbi.nlm.nih.gov/articles/instance/123/bin/table.xlsx",
                 "https://pmc.ncbi.nlm.nih.gov/articles/PMC123/files/notes.txt",
@@ -217,15 +232,15 @@ class PmcTransportAndDiscoveryTest(unittest.TestCase):
         fallback_html = '<a href="/pdf/fallback.pdf">Fallback</a>'
 
         self.assertEqual(
-            pmc._article_pdf_url_from_article_html("PMC123", article_html),
+            public_pmc.discover_article_pdf_url("PMC123", article_html),
             "https://pmc.ncbi.nlm.nih.gov/articles/PMC123/pdf/paper.pdf",
         )
         self.assertEqual(
-            pmc._article_pdf_url_from_article_html("PMC123", fallback_html),
+            public_pmc.discover_article_pdf_url("PMC123", fallback_html),
             "https://pmc.ncbi.nlm.nih.gov/pdf/fallback.pdf",
         )
         self.assertIsNone(
-            pmc._article_pdf_url_from_article_html(
+            public_pmc.discover_article_pdf_url(
                 "PMC123",
                 '<a href="/articles/PMC999/pdf/other.pdf">Other</a>',
             )
@@ -236,11 +251,15 @@ class PmcTransportAndDiscoveryTest(unittest.TestCase):
         response.raise_for_status.return_value = None
 
         with (
-            patch.object(pmc.requests, "get", return_value=response) as get,
-            patch.object(pmc.time, "sleep") as sleep,
+            patch.object(
+                pmc_client.requests,
+                "get",
+                return_value=response,
+            ) as get,
+            patch.object(pmc_client.time, "sleep") as sleep,
         ):
             with self.assertRaises(pmc.PMCRequestError) as raised:
-                pmc._fetch_pmc_xml("PMC123")
+                pmc_client.fetch_pmc_xml("PMC123")
 
         self.assertEqual(raised.exception.category, "unexpected_response")
         self.assertTrue(raised.exception.retryable)
@@ -249,6 +268,83 @@ class PmcTransportAndDiscoveryTest(unittest.TestCase):
 
 
 class PmcDownloadSafetyTest(unittest.TestCase):
+    def test_proof_of_work_parser_and_solver_preserve_challenge_contract(
+        self,
+    ) -> None:
+        html = """
+        <script>
+        POW_CHALLENGE = "fixture";
+        POW_DIFFICULTY = "1";
+        POW_COOKIE_NAME = "pmc-pow";
+        POW_COOKIE_PATH = "/articles/";
+        </script>
+        """
+
+        parsed = pmc_proof_of_work.parse_proof_of_work_challenge(html)
+
+        self.assertEqual(
+            parsed,
+            ("fixture", 1, "pmc-pow", "/articles/"),
+        )
+        nonce = pmc_proof_of_work.solve_proof_of_work_nonce("fixture", 1)
+        self.assertTrue(
+            hashlib.sha256(f"fixture{nonce}".encode("utf-8"))
+            .hexdigest()
+            .startswith("0")
+        )
+
+    def test_pmc_download_retries_retryable_errors_with_linear_backoff(
+        self,
+    ) -> None:
+        expected = Path("/tmp/downloaded.csv")
+        with (
+            patch.object(
+                pmc_downloads,
+                "download_file_once",
+                side_effect=[
+                    requests.Timeout("first"),
+                    requests.Timeout("second"),
+                    expected,
+                ],
+            ) as download_once,
+            patch.object(pmc_downloads.time, "sleep") as sleep,
+        ):
+            result = pmc_downloads.download_file(
+                "https://pmc.ncbi.nlm.nih.gov/file.csv",
+                Path("/tmp"),
+                1,
+            )
+
+        self.assertEqual(result, expected)
+        self.assertEqual(download_once.call_count, 3)
+        self.assertEqual(
+            [call.args[0] for call in sleep.call_args_list],
+            [1.0, 2.0],
+        )
+
+    def test_pmc_request_failure_falls_back_to_pow_transport(self) -> None:
+        expected = Path("/tmp/downloaded.csv")
+        with (
+            patch.object(
+                pmc_downloads.requests,
+                "get",
+                side_effect=requests.ConnectionError("blocked"),
+            ),
+            patch.object(
+                pmc_downloads,
+                "download_with_proof_of_work",
+                return_value=expected,
+            ) as pow_download,
+        ):
+            result = pmc_downloads.download_file_once(
+                "https://pmc.ncbi.nlm.nih.gov/file.csv",
+                Path("/tmp"),
+                1,
+            )
+
+        self.assertEqual(result, expected)
+        pow_download.assert_called_once()
+
     def test_downloaded_content_rejects_empty_html_and_invalid_signatures(self) -> None:
         cases = (
             ("file.txt", "text/plain", b"", "empty"),
@@ -260,16 +356,24 @@ class PmcDownloadSafetyTest(unittest.TestCase):
         for filename, content_type, content, message in cases:
             with self.subTest(filename=filename):
                 with self.assertRaisesRegex(ValueError, message):
-                    pmc._validate_downloaded_content(filename, content_type, content)
+                    public_pmc.validate_downloaded_content(
+                        filename,
+                        content_type,
+                        content,
+                    )
 
     def test_downloaded_content_accepts_known_signatures(self) -> None:
-        pmc._validate_downloaded_content("file.pdf", "application/pdf", b"%PDF-1.7")
-        pmc._validate_downloaded_content(
+        public_pmc.validate_downloaded_content(
+            "file.pdf",
+            "application/pdf",
+            b"%PDF-1.7",
+        )
+        public_pmc.validate_downloaded_content(
             "file.xlsx",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             b"PK\x03\x04",
         )
-        pmc._validate_downloaded_content(
+        public_pmc.validate_downloaded_content(
             "file.tar.gz",
             "application/gzip",
             b"\x1f\x8bdata",
@@ -277,20 +381,26 @@ class PmcDownloadSafetyTest(unittest.TestCase):
 
     def test_safe_filename_removes_directories_and_unsafe_characters(self) -> None:
         self.assertEqual(
-            pmc._safe_filename("../../unsafe<script>.xlsx", "fallback"),
+            pmc_downloads.safe_filename(
+                "../../unsafe<script>.xlsx",
+                "fallback",
+            ),
             "unsafe_script_.xlsx",
         )
-        self.assertEqual(pmc._safe_filename("", "fallback"), "fallback")
+        self.assertEqual(
+            pmc_downloads.safe_filename("", "fallback"),
+            "fallback",
+        )
 
     def test_safe_extract_path_rejects_parent_traversal(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             base = Path(tmp_dir)
             self.assertEqual(
-                pmc._safe_extract_path(base, "nested/file.tsv"),
+                pmc_archives.safe_extract_path(base, "nested/file.tsv"),
                 base / "nested" / "file.tsv",
             )
             with self.assertRaisesRegex(ValueError, "escapes"):
-                pmc._safe_extract_path(base, "../outside.tsv")
+                pmc_archives.safe_extract_path(base, "../outside.tsv")
 
     def test_zip_extraction_returns_only_supported_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -300,7 +410,7 @@ class PmcDownloadSafetyTest(unittest.TestCase):
                 handle.writestr("nested/table.csv", "a,b\n1,2\n")
                 handle.writestr("nested/readme.md", "ignore")
 
-            extracted = pmc._extract_supported_files(archive, root)
+            extracted = public_pmc.extract_supported_files(archive, root)
 
             self.assertEqual([path.name for path in extracted], ["table.csv"])
             self.assertEqual(extracted[0].read_text(encoding="utf-8"), "a,b\n1,2\n")
@@ -313,7 +423,7 @@ class PmcDownloadSafetyTest(unittest.TestCase):
                 handle.writestr("../outside.csv", "a,b\n")
 
             with self.assertRaisesRegex(ValueError, "escapes"):
-                pmc._extract_supported_files(archive, root)
+                public_pmc.extract_supported_files(archive, root)
 
     def test_supplement_discovery_deduplicates_xml_and_html_links(self) -> None:
         xml = """
@@ -323,7 +433,11 @@ class PmcDownloadSafetyTest(unittest.TestCase):
         """
         html = '<a href="supp/table.xlsx">Supplementary table</a>'
 
-        urls = pmc._discover_supplement_urls("PMC123", xml_text=xml, article_html=html)
+        urls = public_pmc.discover_supplement_urls(
+            "PMC123",
+            xml_text=xml,
+            article_html=html,
+        )
 
         self.assertEqual(
             urls,
@@ -333,33 +447,61 @@ class PmcDownloadSafetyTest(unittest.TestCase):
     def test_download_reports_failure_when_no_supported_files_are_found(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             with (
-                patch.object(pmc, "_download_oa_package", return_value=[]),
-                patch.object(pmc, "_fetch_pmc_xml", return_value="<article />"),
-                patch.object(pmc, "_fetch_pmc_article_html", return_value="<html />"),
+                patch.object(
+                    pmc_downloads,
+                    "download_oa_package_files",
+                    return_value=[],
+                ),
+                patch.object(
+                    pmc_downloads,
+                    "fetch_pmc_xml",
+                    return_value="<article />",
+                ),
+                patch.object(
+                    pmc_downloads,
+                    "fetch_pmc_article_html",
+                    return_value="<html />",
+                ),
             ):
                 with self.assertRaisesRegex(ValueError, "No supported supplementary"):
-                    pmc.download_pmc_supplements("PMC123", "PMCID", tmp_dir)
+                    public_pmc.download_pmc_supplements(
+                        "PMC123",
+                        "PMCID",
+                        tmp_dir,
+                    )
 
     def test_download_returns_successful_files_when_other_urls_fail(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             downloaded_path = Path(tmp_dir) / "table.csv"
             downloaded_path.write_text("sample,value\nS1,1\n", encoding="utf-8")
             with (
-                patch.object(pmc, "_download_oa_package", return_value=[]),
-                patch.object(pmc, "_fetch_pmc_xml", return_value="<article />"),
-                patch.object(pmc, "_fetch_pmc_article_html", return_value="<html />"),
                 patch.object(
-                    pmc,
-                    "_discover_supplement_urls",
+                    pmc_downloads,
+                    "download_oa_package_files",
+                    return_value=[],
+                ),
+                patch.object(
+                    pmc_downloads,
+                    "fetch_pmc_xml",
+                    return_value="<article />",
+                ),
+                patch.object(
+                    pmc_downloads,
+                    "fetch_pmc_article_html",
+                    return_value="<html />",
+                ),
+                patch.object(
+                    pmc_downloads,
+                    "discover_supplement_urls",
                     return_value=["https://example.org/good.csv", "https://example.org/bad.csv"],
                 ),
                 patch.object(
-                    pmc,
-                    "_download_url",
+                    pmc_downloads,
+                    "download_file",
                     side_effect=[downloaded_path, ValueError("download failed")],
                 ),
             ):
-                pmcid, downloaded = pmc.download_pmc_supplements(
+                pmcid, downloaded = public_pmc.download_pmc_supplements(
                     "PMC123",
                     "PMCID",
                     tmp_dir,

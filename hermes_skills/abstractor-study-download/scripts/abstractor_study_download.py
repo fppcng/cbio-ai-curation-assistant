@@ -21,17 +21,17 @@ from cbio_curation_assistant.integrations.pmc import (
     PMCRequestError,
     ResolvedStudyIdentifier,
     discover_article_pdf_url,
+    download_file,
+    download_pmc_supplements,
+    extract_supported_files,
     fetch_pmc_article_html,
     fetch_pmc_xml,
     lookup_oa_package_url,
     normalize_pmcid,
     pmid_to_pmcid,
 )
-from cbio_curation_assistant.pmc_supplement_fetcher import (
+from cbio_curation_assistant.supplements.formats import (
     SUPPORTED_SUPPLEMENT_EXTENSIONS,
-    _download_url,
-    _extract_supported_files,
-    download_pmc_supplements,
 )
 from cbio_curation_assistant.workspace import StudyWorkspace, resolve_assistant_home
 from cbio_curation_assistant.workflows.study_download import (
@@ -211,7 +211,7 @@ def _ensure_article_pdf(
         try:
             with tempfile.TemporaryDirectory(prefix=f"{normalize_pmcid(pmcid).lower()}_pdf_") as tmp_dir_name:
                 tmp_dir = Path(tmp_dir_name)
-                downloaded_pdf = _download_url(direct_pdf_url, tmp_dir, 0)
+                downloaded_pdf = download_file(direct_pdf_url, tmp_dir, 0)
                 shutil.copy2(downloaded_pdf, article_pdf_path)
                 return article_pdf_path.resolve(), False
         except PMCRequestError as exc:
@@ -224,8 +224,8 @@ def _ensure_article_pdf(
     try:
         with tempfile.TemporaryDirectory(prefix=f"{normalize_pmcid(pmcid).lower()}_oa_") as tmp_dir_name:
             tmp_dir = Path(tmp_dir_name)
-            package_path = _download_url(package_url, tmp_dir, 0)
-            _extract_supported_files(package_path, tmp_dir)
+            package_path = download_file(package_url, tmp_dir, 0)
+            extract_supported_files(package_path, tmp_dir)
             candidate = _find_article_pdf(tmp_dir, pmcid)
             if candidate is None:
                 warnings.append("PMC OA package did not contain an article PDF.")
