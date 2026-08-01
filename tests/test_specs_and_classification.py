@@ -8,7 +8,6 @@ from unittest.mock import Mock, patch
 import pandas as pd
 import requests
 
-from cbio_curation_assistant import cbioportal_spec, spec_fetcher, spec_match
 from cbio_curation_assistant.cbioportal import classification, specification_sources
 from cbio_curation_assistant.cbioportal.specs import (
     EMBEDDED_SPEC_VERSION,
@@ -199,33 +198,6 @@ class SheetClassificationTest(unittest.TestCase):
 
         self.assertTrue(classification._looks_like_matrix(matrix))
         self.assertFalse(classification._looks_like_matrix(non_matrix))
-
-
-class CompatibilityModuleTest(unittest.TestCase):
-    def test_legacy_public_imports_and_convenience_classifier_remain_available(
-        self,
-    ) -> None:
-        self.assertIs(cbioportal_spec.SPECS, SPECS)
-        self.assertIs(spec_fetcher.fetch_spec, specification_sources.fetch_spec)
-
-        frame = pd.DataFrame(
-            [["PATIENT_ID", "SAMPLE_ID", "primary site"], ["P1", "S1", "Lung"]]
-        )
-        with patch.object(
-            specification_sources.requests,
-            "get",
-            side_effect=AssertionError("normal classification attempted network access"),
-        ) as get:
-            result = spec_match.classify_sheet(frame)
-
-        self.assertEqual(result.format_key, "CLINICAL_SAMPLE")
-        self.assertEqual(result.spec_source, "embedded")
-        self.assertEqual(result.spec_version, EMBEDDED_SPEC_VERSION)
-        get.assert_not_called()
-
-    def test_legacy_classifier_rejects_implicit_live_refresh(self) -> None:
-        with self.assertRaisesRegex(ValueError, "no longer refreshes"):
-            spec_match.classify_sheet(pd.DataFrame(), force_refresh=True)
 
 
 if __name__ == "__main__":

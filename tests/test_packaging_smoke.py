@@ -62,7 +62,6 @@ class InstalledWheelSmokeTest(unittest.TestCase):
                 "cbio_curation_assistant/cbioportal/classification.py",
                 "cbio_curation_assistant/cbioportal/specification_sources.py",
                 "cbio_curation_assistant/cbioportal/specs.py",
-                "cbio_curation_assistant/cbioportal_spec.py",
                 "cbio_curation_assistant/curation_report_cli.py",
                 "cbio_curation_assistant/genome_nexus_cli.py",
                 "cbio_curation_assistant/integrations/genome_nexus.py",
@@ -89,8 +88,6 @@ class InstalledWheelSmokeTest(unittest.TestCase):
                 "cbio_curation_assistant/reports/curation.py",
                 "cbio_curation_assistant/reports/models.py",
                 "cbio_curation_assistant/reports/pdf.py",
-                "cbio_curation_assistant/spec_fetcher.py",
-                "cbio_curation_assistant/spec_match.py",
                 "cbio_curation_assistant/study_download_cli.py",
                 "cbio_curation_assistant/supplements/formats.py",
                 "cbio_curation_assistant/supplements/readers.py",
@@ -102,9 +99,16 @@ class InstalledWheelSmokeTest(unittest.TestCase):
                 with self.subTest(module_path=module_path):
                     self.assertIn(module_path, names)
             for obsolete_module_path in (
+                "cbio_curation_assistant/cbioportal_spec.py",
                 "cbio_curation_assistant/cli_shared.py",
+                "cbio_curation_assistant/config.py",
+                "cbio_curation_assistant/hermes_llm.py",
+                "cbio_curation_assistant/llm_client.py",
                 "cbio_curation_assistant/metadata_merge.py",
                 "cbio_curation_assistant/pdf_metadata_regex.py",
+                "cbio_curation_assistant/pmc_supplement_fetcher.py",
+                "cbio_curation_assistant/spec_fetcher.py",
+                "cbio_curation_assistant/spec_match.py",
                 "cbio_curation_assistant/xml_metadata.py",
             ):
                 with self.subTest(obsolete_module_path=obsolete_module_path):

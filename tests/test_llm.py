@@ -8,10 +8,6 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import cbio_curation_assistant.llm.client as client_module
-from cbio_curation_assistant.config import LLMConfig as LegacyLLMConfig
-from cbio_curation_assistant.hermes_llm import (
-    resolve_optional_hermes_llm_config,
-)
 from cbio_curation_assistant.llm import (
     CompletionClient,
     ConfiguredCompletionClient,
@@ -23,12 +19,6 @@ from cbio_curation_assistant.llm import (
 )
 from cbio_curation_assistant.llm.providers import (
     call_litellm_chat_with_retry,
-)
-from cbio_curation_assistant.llm_client import (
-    call_llm_with_retry as legacy_complete_text,
-)
-from cbio_curation_assistant.llm_client import (
-    parse_llm_json as legacy_parse_llm_json,
 )
 
 
@@ -97,24 +87,6 @@ if loaded:
         self.assertIsNotNone(config)
         self.assertEqual(config.provider, "Anthropic")
 
-    def test_hermes_adapter_uses_general_runtime_resolution(self) -> None:
-        with patch.dict(
-            os.environ,
-            {
-                "OPENAI_API_KEY": "key",
-                "OPENAI_MODEL": "gpt-4.1",
-                "LITELLM_API_KEY": "",
-                "LITELLM_BASE_URL": "",
-                "ANTHROPIC_API_KEY": "",
-            },
-            clear=True,
-        ):
-            config = resolve_optional_hermes_llm_config()
-
-        self.assertIsNotNone(config)
-        self.assertEqual(config.provider, "OpenAI")
-        self.assertEqual(config.model, "gpt-4.1")
-
 
 class LlmJsonParsingTest(unittest.TestCase):
     def test_parser_accepts_fences_comments_trailing_commas_and_text(self) -> None:
@@ -142,9 +114,6 @@ class LlmJsonParsingTest(unittest.TestCase):
     def test_parser_rejects_non_object_payloads(self) -> None:
         with self.assertRaisesRegex(ValueError, "not an object"):
             parse_llm_json("[1, 2]")
-
-    def test_legacy_parser_facade_uses_public_parser(self) -> None:
-        self.assertIs(legacy_parse_llm_json, parse_llm_json)
 
 
 class LlmClientTest(unittest.TestCase):
@@ -267,10 +236,6 @@ class LlmClientTest(unittest.TestCase):
         self.assertEqual(result, "completed")
         self.assertEqual(sleep.call_args_list[0].args, (2,))
         self.assertEqual(sleep.call_args_list[1].args, (4,))
-
-    def test_legacy_client_facade_uses_public_completion_function(self) -> None:
-        self.assertIs(legacy_complete_text, complete_text)
-        self.assertIs(LegacyLLMConfig, LLMConfig)
 
 
 if __name__ == "__main__":

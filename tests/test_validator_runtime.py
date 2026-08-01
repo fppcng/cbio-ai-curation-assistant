@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 import subprocess
 import tempfile
-import tomllib
 import unittest
 from pathlib import Path
 from unittest.mock import ANY, patch
@@ -90,26 +89,6 @@ class ValidatorRuntimeTest(unittest.TestCase):
                 cli._run_validate_study(["--study-id", "pmc1"])
 
             self.assertFalse((root / "studies/pmc1/validation").exists())
-
-    def test_validator_project_matches_legacy_requirements(self) -> None:
-        root = Path(__file__).resolve().parents[1]
-        validator_root = root / "cbioportal_core_validator"
-        project = tomllib.loads(
-            (validator_root / "pyproject.toml").read_text(encoding="utf-8")
-        )
-        project_requirements = {
-            requirement.lower()
-            for requirement in project["project"]["dependencies"]
-        }
-        legacy_requirements = {
-            requirement.lower()
-            for requirement in (
-                validator_root / "requirements.txt"
-            ).read_text(encoding="utf-8").splitlines()
-            if requirement.strip()
-        }
-
-        self.assertEqual(project_requirements, legacy_requirements)
 
     def test_validate_study_requires_the_isolated_project(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

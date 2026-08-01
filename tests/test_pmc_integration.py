@@ -9,7 +9,6 @@ from unittest.mock import Mock, patch
 
 import requests
 
-from cbio_curation_assistant import pmc_supplement_fetcher as pmc
 from cbio_curation_assistant.integrations import pmc as public_pmc
 from cbio_curation_assistant.integrations.pmc import archives as pmc_archives
 from cbio_curation_assistant.integrations.pmc import client as pmc_client
@@ -20,20 +19,6 @@ from cbio_curation_assistant.integrations.pmc import (
 
 
 class PmcPublicApiTest(unittest.TestCase):
-    def test_legacy_facade_reexports_public_models_and_identifier_helpers(
-        self,
-    ) -> None:
-        self.assertIs(pmc.PMCRequestError, public_pmc.PMCRequestError)
-        self.assertIs(
-            pmc.ResolvedStudyIdentifier,
-            public_pmc.ResolvedStudyIdentifier,
-        )
-        self.assertIs(pmc.normalize_pmcid, public_pmc.normalize_pmcid)
-        self.assertIs(
-            pmc.download_pmc_supplements,
-            public_pmc.download_pmc_supplements,
-        )
-
     def test_public_identifier_resolution_accepts_an_injected_pmid_resolver(
         self,
     ) -> None:
@@ -60,46 +45,31 @@ class PmcPublicApiTest(unittest.TestCase):
         self.assertEqual(resolved.identifier_type, "PMID")
         self.assertEqual(resolved.to_dict()["pmcid"], "PMC789")
 
-    def test_public_discovery_api_matches_the_legacy_facade(self) -> None:
-        xml = """
-        <article xmlns:xlink="http://www.w3.org/1999/xlink">
-          <supplementary-material xlink:href="table.xlsx" />
-        </article>
-        """
-
-        self.assertEqual(
-            public_pmc.discover_supplement_urls(
-                "PMC123",
-                xml_text=xml,
-            ),
-            pmc._discover_supplement_urls(
-                "PMC123",
-                xml_text=xml,
-            ),
-        )
-
 
 class PmcIdentifierTest(unittest.TestCase):
     def test_identifier_type_detection_is_explicit(self) -> None:
-        self.assertEqual(pmc.detect_pubmed_identifier_type("pmc123"), "PMCID")
-        self.assertEqual(pmc.detect_pubmed_identifier_type("PMID456"), "PMID")
-        self.assertIsNone(pmc.detect_pubmed_identifier_type("456"))
-        self.assertIsNone(pmc.detect_pubmed_identifier_type("PMC-123"))
+        self.assertEqual(public_pmc.detect_pubmed_identifier_type("pmc123"), "PMCID")
+        self.assertEqual(public_pmc.detect_pubmed_identifier_type("PMID456"), "PMID")
+        self.assertIsNone(public_pmc.detect_pubmed_identifier_type("456"))
+        self.assertIsNone(public_pmc.detect_pubmed_identifier_type("PMC-123"))
 
     def test_normalize_pmcid_accepts_common_forms(self) -> None:
-        self.assertEqual(pmc.normalize_pmcid("pmc123"), "PMC123")
-        self.assertEqual(pmc.normalize_pmcid("123"), "PMC123")
-        self.assertEqual(pmc.normalize_pmcid("prefix PMC123 suffix"), "PMC123")
+        self.assertEqual(public_pmc.normalize_pmcid("pmc123"), "PMC123")
+        self.assertEqual(public_pmc.normalize_pmcid("123"), "PMC123")
+        self.assertEqual(public_pmc.normalize_pmcid("prefix PMC123 suffix"), "PMC123")
 
     def test_normalize_pmcid_rejects_empty_and_non_numeric_values(self) -> None:
         with self.assertRaisesRegex(ValueError, "empty"):
-            pmc.normalize_pmcid("")
+            public_pmc.normalize_pmcid("")
         with self.assertRaisesRegex(ValueError, "Could not parse"):
-            pmc.normalize_pmcid("PMC")
+            public_pmc.normalize_pmcid("PMC")
 
     def test_resolve_pmcid_does_not_use_the_converter(self) -> None:
-        with patch.object(pmc, "pmid_to_pmcid") as converter:
-            resolved = pmc.resolve_study_identifier_to_pmcid("PMC123")
+        converter = Mock()
+        resolved = public_pmc.resolve_study_identifier_to_pmcid(
+            "PMC123",
+            pmid_resolver=converter,
+        )
 
         converter.assert_not_called()
         self.assertEqual(resolved.identifier_type, "PMCID")
@@ -107,8 +77,11 @@ class PmcIdentifierTest(unittest.TestCase):
         self.assertEqual(resolved.pmcid, "PMC123")
 
     def test_resolve_pmid_uses_the_converter(self) -> None:
-        with patch.object(pmc, "pmid_to_pmcid", return_value="PMC789") as converter:
-            resolved = pmc.resolve_study_identifier_to_pmcid("PMID456")
+        converter = Mock(return_value="PMC789")
+        resolved = public_pmc.resolve_study_identifier_to_pmcid(
+            "PMID456",
+            pmid_resolver=converter,
+        )
 
         converter.assert_called_once_with("456")
         self.assertEqual(resolved.identifier_type, "PMID")
@@ -149,9 +122,7 @@ class PmcErrorAndRetryTest(unittest.TestCase):
         }
         for message, expected in cases.items():
             with self.subTest(message=message):
-                classification = pmc_client.classify_pmc_error(
-                    ValueError(message)
-                )
+                classification = pmc_client.classify_pmc_error(ValueError(message))
                 self.assertEqual(
                     (classification.category, classification.retryable),
                     expected,
@@ -180,7 +151,7 @@ class PmcErrorAndRetryTest(unittest.TestCase):
     def test_retry_stops_immediately_for_non_retryable_failure(self) -> None:
         request = Mock(side_effect=ValueError("PMID must contain digits."))
         with patch.object(pmc_client.time, "sleep") as sleep:
-            with self.assertRaises(pmc.PMCRequestError) as raised:
+            with self.assertRaises(public_pmc.PMCRequestError) as raised:
                 pmc_client.run_with_pmc_retry(
                     operation="test",
                     request_fn=request,
@@ -271,7 +242,7 @@ class PmcTransportAndDiscoveryTest(unittest.TestCase):
             ) as get,
             patch.object(pmc_client.time, "sleep") as sleep,
         ):
-            with self.assertRaises(pmc.PMCRequestError) as raised:
+            with self.assertRaises(public_pmc.PMCRequestError) as raised:
                 pmc_client.fetch_pmc_xml("PMC123")
 
         self.assertEqual(raised.exception.category, "unexpected_response")
@@ -506,7 +477,10 @@ class PmcDownloadSafetyTest(unittest.TestCase):
                 patch.object(
                     pmc_downloads,
                     "discover_supplement_urls",
-                    return_value=["https://example.org/good.csv", "https://example.org/bad.csv"],
+                    return_value=[
+                        "https://example.org/good.csv",
+                        "https://example.org/bad.csv",
+                    ],
                 ),
                 patch.object(
                     pmc_downloads,

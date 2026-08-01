@@ -342,19 +342,6 @@ def compare_live_specifications(
     )
 
 
-def fetch_spec(force_refresh: bool = False) -> dict[str, Any]:
-    """Compatibility alias for the explicit live refresh operation."""
-    return refresh_live_spec(force_refresh=force_refresh)
-
-
-def get_spec_or_fallback(force_refresh: bool = False) -> list[FormatSpec]:
-    """Return embedded specs, optionally preferring an explicitly refreshed live set."""
-    if not force_refresh:
-        return get_embedded_spec()["specs"]
-    live_result = refresh_live_spec(force_refresh=True)
-    return live_result["specs"] or get_embedded_spec()["specs"]
-
-
 def clear_cache() -> None:
     """Clear the explicit live-refresh memory cache."""
     _CACHE.update({"result": None, "ts": 0.0})
@@ -368,9 +355,7 @@ __all__ = [
     "clear_cache",
     "compare_live_specifications",
     "compare_specifications",
-    "fetch_spec",
     "get_embedded_spec",
-    "get_spec_or_fallback",
     "parse_upstream_specifications",
     "refresh_live_spec",
 ]
