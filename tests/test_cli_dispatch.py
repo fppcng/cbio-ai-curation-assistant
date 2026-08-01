@@ -18,17 +18,7 @@ class CliDispatchTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("usage: cbio-curation", stdout.getvalue())
 
-    def test_each_script_command_forwards_remaining_arguments(self) -> None:
-        for command in cli._SCRIPT_COMMANDS:
-            with self.subTest(command=command):
-                with patch.object(cli, "_run_script", return_value=7) as run_script:
-                    code = cli.main([command, "--example", "value"])
-
-                self.assertEqual(code, 7)
-                run_script.assert_called_once_with(command, ["--example", "value"])
-
     def test_study_download_uses_direct_package_dispatch(self) -> None:
-        self.assertNotIn("study-download", cli._SCRIPT_COMMANDS)
         with patch.object(cli, "_run_study_download", return_value=7) as download:
             code = cli.main(
                 [
@@ -46,12 +36,28 @@ class CliDispatchTest(unittest.TestCase):
         )
 
     def test_curation_report_uses_direct_package_dispatch(self) -> None:
-        self.assertNotIn("curation-report", cli._SCRIPT_COMMANDS)
         with patch.object(cli, "_run_curation_report", return_value=7) as report:
             code = cli.main(["curation-report", "--study-id", "pmc123"])
 
         self.assertEqual(code, 7)
         report.assert_called_once_with(["--study-id", "pmc123"])
+
+    def test_genome_nexus_uses_direct_package_dispatch(self) -> None:
+        with patch.object(cli, "_run_genome_nexus", return_value=7) as annotation:
+            code = cli.main(
+                [
+                    "genome-nexus",
+                    "--study-id",
+                    "pmc123",
+                    "--genome-build",
+                    "GRCh37",
+                ]
+            )
+
+        self.assertEqual(code, 7)
+        annotation.assert_called_once_with(
+            ["--study-id", "pmc123", "--genome-build", "GRCh37"]
+        )
 
     def test_validate_command_uses_dedicated_dispatch(self) -> None:
         with patch.object(cli, "_run_validate_study", return_value=3) as validate:
@@ -89,7 +95,6 @@ class CliDispatchTest(unittest.TestCase):
         )
 
     def test_oncotree_search_uses_direct_package_dispatch(self) -> None:
-        self.assertNotIn("oncotree-search", cli._SCRIPT_COMMANDS)
         with patch.object(
             cli,
             "run_oncotree_search_command",
@@ -101,7 +106,6 @@ class CliDispatchTest(unittest.TestCase):
         run.assert_called_once_with(["--query", "LUAD", "--json"])
 
     def test_clinical_dictionary_uses_direct_package_dispatch(self) -> None:
-        self.assertNotIn("clinical-dictionary", cli._SCRIPT_COMMANDS)
         with patch.object(
             cli,
             "run_clinical_dictionary_command",

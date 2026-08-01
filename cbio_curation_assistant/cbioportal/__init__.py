@@ -42,6 +42,12 @@ from cbio_curation_assistant.cbioportal.oncotree import (
     score_candidate,
     search_oncotree,
 )
+from cbio_curation_assistant.cbioportal.mutations import (
+    MafInspection,
+    MafValidationError,
+    REQUIRED_MAF_COLUMNS,
+    inspect_maf,
+)
 
 __all__ = [
     "ClinicalDictionaryAttribute",
@@ -60,11 +66,15 @@ __all__ = [
     "ClinicalMetadataOverride",
     "ClinicalOncotreeInspection",
     "ClinicalValueSuggestion",
+    "MafInspection",
+    "MafValidationError",
     "OncotreeCandidate",
     "OncotreeMatch",
     "OncotreeProvenance",
     "OncotreeSearchResult",
+    "REQUIRED_MAF_COLUMNS",
     "inspect_clinical_sample",
+    "inspect_maf",
     "build_clinical_mapping_report",
     "load_clinical_dictionary",
     "load_clinical_dictionary_provenance",

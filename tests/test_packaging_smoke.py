@@ -64,6 +64,8 @@ class InstalledWheelSmokeTest(unittest.TestCase):
                 "cbio_curation_assistant/cbioportal/specs.py",
                 "cbio_curation_assistant/cbioportal_spec.py",
                 "cbio_curation_assistant/curation_report_cli.py",
+                "cbio_curation_assistant/genome_nexus_cli.py",
+                "cbio_curation_assistant/integrations/genome_nexus.py",
                 "cbio_curation_assistant/integrations/pmc/__init__.py",
                 "cbio_curation_assistant/integrations/pmc/archives.py",
                 "cbio_curation_assistant/integrations/pmc/client.py",
@@ -94,6 +96,8 @@ class InstalledWheelSmokeTest(unittest.TestCase):
                 "cbio_curation_assistant/supplements/readers.py",
                 "cbio_curation_assistant/workflows/study_download.py",
                 "cbio_curation_assistant/workflows/curation_report.py",
+                "cbio_curation_assistant/workflows/mutation_annotation.py",
+                "cbio_curation_assistant/cbioportal/mutations.py",
             ):
                 with self.subTest(module_path=module_path):
                     self.assertIn(module_path, names)
@@ -201,6 +205,25 @@ class InstalledWheelSmokeTest(unittest.TestCase):
             self.assertIn(
                 "cbio-curation curation-report",
                 curation_report_help.stdout,
+            )
+
+            genome_nexus_help = subprocess.run(
+                [str(command), "genome-nexus", "--help"],
+                cwd=root,
+                env=help_environment,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            self.assertEqual(
+                genome_nexus_help.returncode,
+                0,
+                genome_nexus_help.stderr,
+            )
+            self.assertIn(
+                "cbio-curation genome-nexus",
+                genome_nexus_help.stdout,
             )
 
             llm_import = subprocess.run(

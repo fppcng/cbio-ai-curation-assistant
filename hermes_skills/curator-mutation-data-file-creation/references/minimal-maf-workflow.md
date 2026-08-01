@@ -1,6 +1,6 @@
 # Minimal MAF Workflow
 
-This note condenses the mutation-data guidance from `curator-cbioportal-dataset-generation/references/cBioPortal_Data_Curation_SOP.md` and the contract enforced by `scripts/run_genome_nexus.py`.
+This note condenses the mutation-data guidance from `curator-cbioportal-dataset-generation/references/cBioPortal_Data_Curation_SOP.md` and the contract enforced by the package command `cbio-curation genome-nexus`.
 
 ## Workspace and paths
 

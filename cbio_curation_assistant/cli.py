@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import argparse
 import os
-import runpy
 import shutil
 import subprocess
 import sys
 from collections.abc import Sequence
-from contextlib import contextmanager
 from pathlib import Path
 
 from cbio_curation_assistant.command_result import (
@@ -30,12 +28,10 @@ from cbio_curation_assistant.workspace import (
 )
 
 
-_SCRIPT_COMMANDS: dict[str, str] = {
-    "genome-nexus": "hermes_skills/curator-mutation-data-file-creation/scripts/run_genome_nexus.py",
-}
 _DIRECT_COMMANDS = (
     "clinical-dictionary",
     "curation-report",
+    "genome-nexus",
     "oncotree-search",
     "study-download",
     "validate-study",
@@ -51,7 +47,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "command",
         nargs="?",
-        choices=sorted((*_SCRIPT_COMMANDS, *_DIRECT_COMMANDS)),
+        choices=sorted(_DIRECT_COMMANDS),
         help="Workflow command to run.",
     )
     parser.add_argument(
@@ -64,42 +60,6 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _assistant_home() -> Path:
     return resolve_assistant_home(os.environ.get(ENV_VAR_NAME))
-
-
-@contextmanager
-def _script_execution_context(script_path: Path, script_args: Sequence[str]):
-    old_argv = sys.argv
-    old_path = sys.path.copy()
-    sys.argv = [str(script_path), *script_args]
-    sys.path.insert(0, str(script_path.parent))
-    sys.path.insert(0, str(_assistant_home()))
-    try:
-        yield
-    finally:
-        sys.argv = old_argv
-        sys.path[:] = old_path
-
-
-def _run_external_script(script_path: Path, script_args: Sequence[str]) -> int:
-    with _script_execution_context(script_path, script_args):
-        try:
-            runpy.run_path(str(script_path), run_name="__main__")
-        except SystemExit as exc:
-            if exc.code is None:
-                return 0
-            if isinstance(exc.code, int):
-                return exc.code
-            print(exc.code, file=sys.stderr)
-            return 1
-    return 0
-
-
-def _run_script(command: str, script_args: Sequence[str]) -> int:
-    script_path = _assistant_home() / _SCRIPT_COMMANDS[command]
-    if not script_path.is_file():
-        raise FileNotFoundError(f"Workflow implementation not found: {script_path}")
-
-    return _run_external_script(script_path, script_args)
 
 
 def _build_validate_parser() -> argparse.ArgumentParser:
@@ -249,6 +209,14 @@ def _run_curation_report(script_args: Sequence[str]) -> int:
     return run_curation_report_command(script_args)
 
 
+def _run_genome_nexus(script_args: Sequence[str]) -> int:
+    from cbio_curation_assistant.genome_nexus_cli import (
+        run_genome_nexus_command,
+    )
+
+    return run_genome_nexus_command(script_args)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -266,11 +234,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _run_study_download(args.args)
         if args.command == "curation-report":
             return _run_curation_report(args.args)
+        if args.command == "genome-nexus":
+            return _run_genome_nexus(args.args)
         if args.command == "clinical-dictionary":
             return run_clinical_dictionary_command(args.args)
         if args.command == "oncotree-search":
             return run_oncotree_search_command(args.args)
-        return _run_script(args.command, args.args)
+        raise ValueError(f"Unsupported command: {args.command}")
     except WorkspaceError as exc:
         emit_command_result(command_error(args.command, exc))
         return 1

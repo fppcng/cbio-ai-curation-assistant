@@ -10,20 +10,26 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from cbio_curation_assistant import curation_report_cli, study_download_cli
+from cbio_curation_assistant import (
+    curation_report_cli,
+    genome_nexus_cli,
+    study_download_cli,
+)
+from cbio_curation_assistant.cbioportal.mutations import (
+    MafValidationError,
+    inspect_maf,
+)
+from cbio_curation_assistant.integrations import genome_nexus
 from cbio_curation_assistant.integrations.pmc import PMCErrorClassification
 from cbio_curation_assistant.supplements.models import SupplementaryClassification
 from cbio_curation_assistant.workspace import StudyWorkspace
 from cbio_curation_assistant.workflows import (
     curation_report as curation_report_workflow,
 )
-from cbio_curation_assistant.workflows import study_download as study_download_workflow
-from tests.script_loader import load_script_module
-
-
-GENOME_NEXUS_SCRIPT = (
-    "hermes_skills/curator-mutation-data-file-creation/scripts/run_genome_nexus.py"
+from cbio_curation_assistant.workflows import (
+    mutation_annotation as mutation_annotation_workflow,
 )
+from cbio_curation_assistant.workflows import study_download as study_download_workflow
 
 
 class StudyDownloadWorkflowTest(unittest.TestCase):
@@ -263,13 +269,6 @@ class CurationReportWorkflowTest(unittest.TestCase):
 
 
 class GenomeNexusWorkflowTest(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.workflow = load_script_module(
-            "genome_nexus_characterization",
-            GENOME_NEXUS_SCRIPT,
-        )
-
     @staticmethod
     def maf_text(*, include_status: bool = False, status: str = "SUCCESS") -> str:
         columns = [
@@ -294,7 +293,7 @@ class GenomeNexusWorkflowTest(unittest.TestCase):
                 + "17\t2\t2\tG\tC\tS2\tSUCCESS\n",
                 encoding="utf-8",
             )
-            summary = self.workflow.inspect_maf(path, require_status=True)
+            summary = inspect_maf(path, require_status=True)
 
         self.assertEqual(summary.records, 2)
         self.assertEqual(summary.successful_annotations, 1)
@@ -308,28 +307,35 @@ class GenomeNexusWorkflowTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp_dir:
             path = Path(tmp_dir) / "minimal.maf"
             path.write_text("Chromosome\tStart_Position\n17\t1\n", encoding="utf-8")
-            with self.assertRaisesRegex(self.workflow.PipelineError, "missing required"):
-                self.workflow.inspect_maf(path, require_status=False)
+            with self.assertRaisesRegex(MafValidationError, "missing required"):
+                inspect_maf(path, require_status=False)
 
-    def test_main_emits_structured_error_json(self) -> None:
-        args = SimpleNamespace(
-            study_id="missing",
-            genome_build="GRCh37",
-            image="image",
-            timeout=1,
-            force=False,
-        )
+    def test_cli_accepts_arguments_and_emits_structured_error_json(self) -> None:
         stdout = io.StringIO()
+        workflow_run = mutation_annotation_workflow.GenomeNexusRun(
+            status="error",
+            error=mutation_annotation_workflow.PipelineError("missing workspace"),
+        )
         with (
-            patch.object(self.workflow, "parse_args", return_value=args),
             patch.object(
-                self.workflow,
-                "resolve_workspace",
-                side_effect=self.workflow.PipelineError("missing workspace"),
-            ),
+                genome_nexus_cli,
+                "run_genome_nexus_annotation",
+                return_value=workflow_run,
+            ) as run_annotation,
             contextlib.redirect_stdout(stdout),
         ):
-            code = self.workflow.main()
+            code = genome_nexus_cli.run_genome_nexus_command(
+                [
+                    "--study-id",
+                    "missing",
+                    "--genome-build",
+                    "GRCh37",
+                    "--image",
+                    "image",
+                    "--timeout",
+                    "1",
+                ]
+            )
 
         payload = json.loads(stdout.getvalue())
         self.assertEqual(code, 1)
@@ -337,152 +343,238 @@ class GenomeNexusWorkflowTest(unittest.TestCase):
         self.assertEqual(payload["status"], "error")
         self.assertEqual(payload["error"]["message"], "missing workspace")
         self.assertIsNone(payload["result"])
+        run_annotation.assert_called_once_with(
+            study_id="missing",
+            genome_build="GRCh37",
+            image="image",
+            timeout=1,
+            force=False,
+        )
 
-    def test_main_emits_success_json_for_valid_mocked_pipeline_output(self) -> None:
+    def test_cli_preserves_success_and_partial_success_contracts(self) -> None:
+        root = Path("/study")
+        common = {
+            "genome_build": "GRCh37",
+            "docker_image": "image",
+            "workspace": root / "curated",
+            "input_file": root / "curated/minimal_mutations.maf",
+            "input_records": 1,
+            "output_records": 1,
+            "successful_annotations": 1,
+            "failed_annotations": 0,
+            "annotation_status_counts": {"SUCCESS": 1},
+            "record_count_mismatch": False,
+        }
+        success_result = mutation_annotation_workflow.GenomeNexusResult(
+            **common,
+            output_file=root / "curated/data_mutations.txt",
+            error_report=root / "curated/annotations_errors.txt",
+            log_file=root / "curated/genome_nexus.log",
+        )
+        attempt = mutation_annotation_workflow.GenomeNexusAttemptArtifacts(
+            attempt_directory=root / "validation/attempts/attempt",
+            candidate_output_file=root / "validation/attempts/attempt/data_mutations.txt",
+        )
+        partial_result = mutation_annotation_workflow.GenomeNexusResult(
+            **{**common, "failed_annotations": 1, "successful_annotations": 0},
+            attempt=attempt,
+            canonical_outputs_preserved=False,
+        )
+
+        cases = (
+            (
+                mutation_annotation_workflow.GenomeNexusRun(
+                    status="success",
+                    result=success_result,
+                ),
+                0,
+            ),
+            (
+                mutation_annotation_workflow.GenomeNexusRun(
+                    status="partial_success",
+                    result=partial_result,
+                    warnings=("one annotation failed",),
+                ),
+                3,
+            ),
+        )
+        for workflow_run, expected_code in cases:
+            with self.subTest(status=workflow_run.status):
+                stdout = io.StringIO()
+                with (
+                    patch.object(
+                        genome_nexus_cli,
+                        "run_genome_nexus_annotation",
+                        return_value=workflow_run,
+                    ),
+                    contextlib.redirect_stdout(stdout),
+                ):
+                    code = genome_nexus_cli.run_genome_nexus_command(
+                        [
+                            "--study-id",
+                            "pmc123",
+                            "--genome-build",
+                            "GRCh37",
+                        ]
+                    )
+
+                payload = json.loads(stdout.getvalue())
+                self.assertEqual(code, expected_code)
+                self.assertEqual(payload["status"], workflow_run.status)
+                self.assertEqual(payload["result"]["input_records"], 1)
+
+    def test_workflow_promotes_valid_pipeline_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             workspace = Path(tmp_dir)
-            input_path = workspace / self.workflow.MINIMAL_MAF_FILENAME
+            input_path = workspace / mutation_annotation_workflow.MINIMAL_MAF_FILENAME
             attempt_dir = workspace / "attempt"
             input_path.write_text(self.maf_text(), encoding="utf-8")
-            args = SimpleNamespace(
-                study_id="pmc123",
-                genome_build="GRCh37",
-                image="image",
-                timeout=1,
-                force=False,
-            )
 
-            def run_pipeline(*args: object, **kwargs: object) -> SimpleNamespace:
-                (attempt_dir / self.workflow.OUTPUT_MAF_FILENAME).write_text(
+            def run_pipeline(*args: object, **kwargs: object) -> genome_nexus.GenomeNexusExecution:
+                (attempt_dir / mutation_annotation_workflow.OUTPUT_MAF_FILENAME).write_text(
                     self.maf_text(include_status=True),
                     encoding="utf-8",
                 )
-                return SimpleNamespace(returncode=0, stdout="ok", stderr="")
+                return genome_nexus.GenomeNexusExecution(
+                    command=("docker", "run"),
+                    returncode=0,
+                    stdout="ok",
+                    stderr="",
+                )
 
             def create_attempt(*args: object, **kwargs: object) -> Path:
                 attempt_dir.mkdir()
                 return attempt_dir
 
-            stdout = io.StringIO()
             with (
-                patch.object(self.workflow, "parse_args", return_value=args),
-                patch.object(self.workflow, "resolve_workspace", return_value=workspace),
-                patch.object(self.workflow, "check_docker"),
                 patch.object(
-                    self.workflow,
+                    mutation_annotation_workflow,
+                    "resolve_workspace",
+                    return_value=workspace,
+                ),
+                patch.object(genome_nexus, "check_docker_image"),
+                patch.object(
+                    mutation_annotation_workflow,
                     "create_attempt_directory",
                     side_effect=create_attempt,
                 ),
-                patch.object(
-                    self.workflow.subprocess,
-                    "run",
-                    side_effect=run_pipeline,
-                ),
-                contextlib.redirect_stdout(stdout),
+                patch.object(genome_nexus, "run_annotation_container", side_effect=run_pipeline),
             ):
-                code = self.workflow.main()
+                run = mutation_annotation_workflow.run_genome_nexus_annotation(
+                    study_id="pmc123",
+                    genome_build="GRCh37",
+                    image="image",
+                    timeout=1,
+                )
 
-            payload = json.loads(stdout.getvalue())
             canonical_output_exists = (
-                workspace / self.workflow.OUTPUT_MAF_FILENAME
+                workspace / mutation_annotation_workflow.OUTPUT_MAF_FILENAME
             ).is_file()
             attempt_exists = attempt_dir.exists()
 
-        self.assertEqual(code, 0)
-        self.assertEqual(payload["status"], "success")
-        self.assertEqual(payload["result"]["input_records"], 1)
-        self.assertEqual(payload["result"]["successful_annotations"], 1)
+        self.assertEqual(run.status, "success")
+        self.assertIsInstance(run.result, mutation_annotation_workflow.GenomeNexusResult)
+        assert isinstance(run.result, mutation_annotation_workflow.GenomeNexusResult)
+        self.assertEqual(run.result.input_records, 1)
+        self.assertEqual(run.result.successful_annotations, 1)
         self.assertTrue(canonical_output_exists)
         self.assertFalse(attempt_exists)
 
-    def test_main_reports_partial_success_for_record_count_mismatch(self) -> None:
+    def test_workflow_reports_partial_success_for_record_count_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             workspace = Path(tmp_dir)
-            input_path = workspace / self.workflow.MINIMAL_MAF_FILENAME
+            input_path = workspace / mutation_annotation_workflow.MINIMAL_MAF_FILENAME
             attempt_dir = workspace / "attempt"
             input_path.write_text(self.maf_text(), encoding="utf-8")
-            args = SimpleNamespace(
-                study_id="pmc123",
-                genome_build="GRCh37",
-                image="image",
-                timeout=1,
-                force=False,
-            )
 
-            def run_pipeline(*args: object, **kwargs: object) -> SimpleNamespace:
-                (attempt_dir / self.workflow.OUTPUT_MAF_FILENAME).write_text(
+            def run_pipeline(*args: object, **kwargs: object) -> genome_nexus.GenomeNexusExecution:
+                (attempt_dir / mutation_annotation_workflow.OUTPUT_MAF_FILENAME).write_text(
                     self.maf_text(include_status=True)
                     + "17\t2\t2\tG\tC\tS2\tSUCCESS\n",
                     encoding="utf-8",
                 )
-                return SimpleNamespace(returncode=0, stdout="ok", stderr="")
+                return genome_nexus.GenomeNexusExecution(
+                    command=("docker", "run"),
+                    returncode=0,
+                    stdout="ok",
+                    stderr="",
+                )
 
             def create_attempt(*args: object, **kwargs: object) -> Path:
                 attempt_dir.mkdir()
                 return attempt_dir
 
-            stdout = io.StringIO()
             with (
-                patch.object(self.workflow, "parse_args", return_value=args),
-                patch.object(self.workflow, "resolve_workspace", return_value=workspace),
-                patch.object(self.workflow, "check_docker"),
                 patch.object(
-                    self.workflow,
+                    mutation_annotation_workflow,
+                    "resolve_workspace",
+                    return_value=workspace,
+                ),
+                patch.object(genome_nexus, "check_docker_image"),
+                patch.object(
+                    mutation_annotation_workflow,
                     "create_attempt_directory",
                     side_effect=create_attempt,
                 ),
-                patch.object(self.workflow.subprocess, "run", side_effect=run_pipeline),
-                contextlib.redirect_stdout(stdout),
+                patch.object(genome_nexus, "run_annotation_container", side_effect=run_pipeline),
             ):
-                code = self.workflow.main()
+                run = mutation_annotation_workflow.run_genome_nexus_annotation(
+                    study_id="pmc123",
+                    genome_build="GRCh37",
+                    image="image",
+                    timeout=1,
+                )
 
-            payload = json.loads(stdout.getvalue())
             candidate_exists = (
-                attempt_dir / self.workflow.OUTPUT_MAF_FILENAME
+                attempt_dir / mutation_annotation_workflow.OUTPUT_MAF_FILENAME
             ).is_file()
             canonical_output_exists = (
-                workspace / self.workflow.OUTPUT_MAF_FILENAME
+                workspace / mutation_annotation_workflow.OUTPUT_MAF_FILENAME
             ).exists()
 
-        self.assertEqual(code, 3)
-        self.assertEqual(payload["status"], "partial_success")
-        self.assertTrue(payload["result"]["record_count_mismatch"])
-        self.assertEqual(payload["result"]["attempt_directory"], str(attempt_dir))
+        self.assertEqual(run.status, "partial_success")
+        assert isinstance(run.result, mutation_annotation_workflow.GenomeNexusResult)
+        self.assertTrue(run.result.record_count_mismatch)
+        self.assertEqual(run.result.attempt.attempt_directory, attempt_dir)
         self.assertTrue(candidate_exists)
         self.assertFalse(canonical_output_exists)
 
     def test_force_preflight_failure_preserves_existing_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             workspace = Path(tmp_dir)
-            input_path = workspace / self.workflow.MINIMAL_MAF_FILENAME
-            output_path = workspace / self.workflow.OUTPUT_MAF_FILENAME
+            input_path = workspace / mutation_annotation_workflow.MINIMAL_MAF_FILENAME
+            output_path = workspace / mutation_annotation_workflow.OUTPUT_MAF_FILENAME
             input_path.write_text(self.maf_text(), encoding="utf-8")
             output_path.write_text("previous output\n", encoding="utf-8")
-            args = SimpleNamespace(
-                study_id="pmc123",
-                genome_build="GRCh37",
-                image="image",
-                timeout=1,
-                force=True,
-            )
 
-            stdout = io.StringIO()
             with (
-                patch.object(self.workflow, "parse_args", return_value=args),
-                patch.object(self.workflow, "resolve_workspace", return_value=workspace),
                 patch.object(
-                    self.workflow,
-                    "check_docker",
-                    side_effect=self.workflow.PipelineError("docker unavailable"),
+                    mutation_annotation_workflow,
+                    "resolve_workspace",
+                    return_value=workspace,
                 ),
-                patch.object(self.workflow, "create_attempt_directory") as create_attempt,
-                contextlib.redirect_stdout(stdout),
+                patch.object(
+                    genome_nexus,
+                    "check_docker_image",
+                    side_effect=genome_nexus.GenomeNexusIntegrationError(
+                        "docker unavailable"
+                    ),
+                ),
+                patch.object(
+                    mutation_annotation_workflow,
+                    "create_attempt_directory",
+                ) as create_attempt,
             ):
-                code = self.workflow.main()
+                run = mutation_annotation_workflow.run_genome_nexus_annotation(
+                    study_id="pmc123",
+                    genome_build="GRCh37",
+                    image="image",
+                    timeout=1,
+                    force=True,
+                )
 
-            payload = json.loads(stdout.getvalue())
-            self.assertEqual(code, 1)
-            self.assertEqual(payload["status"], "error")
+            self.assertEqual(run.status, "error")
+            self.assertEqual(str(run.error), "docker unavailable")
             self.assertEqual(output_path.read_text(encoding="utf-8"), "previous output\n")
             create_attempt.assert_not_called()
 
@@ -490,50 +582,56 @@ class GenomeNexusWorkflowTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp_dir:
             workspace = Path(tmp_dir)
             attempt_dir = workspace / "attempt"
-            input_path = workspace / self.workflow.MINIMAL_MAF_FILENAME
-            output_path = workspace / self.workflow.OUTPUT_MAF_FILENAME
+            input_path = workspace / mutation_annotation_workflow.MINIMAL_MAF_FILENAME
+            output_path = workspace / mutation_annotation_workflow.OUTPUT_MAF_FILENAME
             input_path.write_text(self.maf_text(), encoding="utf-8")
             output_path.write_text("previous output\n", encoding="utf-8")
-            args = SimpleNamespace(
-                study_id="pmc123",
-                genome_build="GRCh37",
-                image="image",
-                timeout=1,
-                force=True,
-            )
 
             def create_attempt(*args: object, **kwargs: object) -> Path:
                 attempt_dir.mkdir()
                 return attempt_dir
 
-            def run_pipeline(*args: object, **kwargs: object) -> SimpleNamespace:
-                (attempt_dir / self.workflow.OUTPUT_MAF_FILENAME).write_text(
+            def run_pipeline(*args: object, **kwargs: object) -> genome_nexus.GenomeNexusExecution:
+                (attempt_dir / mutation_annotation_workflow.OUTPUT_MAF_FILENAME).write_text(
                     self.maf_text(include_status=True, status="FAILED"),
                     encoding="utf-8",
                 )
-                return SimpleNamespace(returncode=0, stdout="ok", stderr="")
+                return genome_nexus.GenomeNexusExecution(
+                    command=("docker", "run"),
+                    returncode=0,
+                    stdout="ok",
+                    stderr="",
+                )
 
-            stdout = io.StringIO()
             with (
-                patch.object(self.workflow, "parse_args", return_value=args),
-                patch.object(self.workflow, "resolve_workspace", return_value=workspace),
-                patch.object(self.workflow, "check_docker"),
                 patch.object(
-                    self.workflow,
+                    mutation_annotation_workflow,
+                    "resolve_workspace",
+                    return_value=workspace,
+                ),
+                patch.object(genome_nexus, "check_docker_image"),
+                patch.object(
+                    mutation_annotation_workflow,
                     "create_attempt_directory",
                     side_effect=create_attempt,
                 ),
-                patch.object(self.workflow.subprocess, "run", side_effect=run_pipeline),
-                contextlib.redirect_stdout(stdout),
+                patch.object(genome_nexus, "run_annotation_container", side_effect=run_pipeline),
             ):
-                code = self.workflow.main()
+                run = mutation_annotation_workflow.run_genome_nexus_annotation(
+                    study_id="pmc123",
+                    genome_build="GRCh37",
+                    image="image",
+                    timeout=1,
+                    force=True,
+                )
 
-            payload = json.loads(stdout.getvalue())
-            self.assertEqual(code, 3)
-            self.assertEqual(payload["status"], "partial_success")
+            self.assertEqual(run.status, "partial_success")
             self.assertEqual(output_path.read_text(encoding="utf-8"), "previous output\n")
-            self.assertTrue(payload["result"]["canonical_outputs_preserved"])
-            self.assertTrue((attempt_dir / self.workflow.OUTPUT_MAF_FILENAME).is_file())
+            assert isinstance(run.result, mutation_annotation_workflow.GenomeNexusResult)
+            self.assertTrue(run.result.canonical_outputs_preserved)
+            self.assertTrue(
+                (attempt_dir / mutation_annotation_workflow.OUTPUT_MAF_FILENAME).is_file()
+            )
 
     def test_failed_promotion_rolls_back_all_canonical_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -542,14 +640,14 @@ class GenomeNexusWorkflowTest(unittest.TestCase):
             attempt_dir = root / "validation" / "attempts" / "attempt"
             workspace.mkdir()
             attempt_dir.mkdir(parents=True)
-            canonical = self.workflow.canonical_paths(workspace)
-            candidates = self.workflow.canonical_paths(attempt_dir)
+            canonical = mutation_annotation_workflow.canonical_paths(workspace)
+            candidates = mutation_annotation_workflow.canonical_paths(attempt_dir)
 
             for key in ("output", "error_report", "log"):
                 canonical[key].write_text(f"old {key}\n", encoding="utf-8")
                 candidates[key].write_text(f"new {key}\n", encoding="utf-8")
 
-            real_replace = self.workflow.os.replace
+            real_replace = mutation_annotation_workflow.os.replace
             failed_once = False
 
             def fail_during_promotion(source: object, target: object) -> None:
@@ -560,12 +658,12 @@ class GenomeNexusWorkflowTest(unittest.TestCase):
                 real_replace(source, target)
 
             with patch.object(
-                self.workflow.os,
+                mutation_annotation_workflow.os,
                 "replace",
                 side_effect=fail_during_promotion,
             ):
                 with self.assertRaisesRegex(OSError, "promotion failed"):
-                    self.workflow.promote_attempt_outputs(
+                    mutation_annotation_workflow.promote_attempt_outputs(
                         candidates,
                         canonical,
                         attempt_dir,
