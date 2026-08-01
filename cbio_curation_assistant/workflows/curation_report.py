@@ -10,10 +10,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from cbio_curation_assistant.command_result import (
-    CommandResult,
-    command_result,
-)
 from cbio_curation_assistant.llm import LLMConfig
 from cbio_curation_assistant.publications import (
     PublicationMetadata,
@@ -138,7 +134,7 @@ class AgentReportData:
 @dataclass(frozen=True, slots=True)
 class CurationReportRun:
     report: Mapping[str, Any]
-    agent_report: CommandResult[AgentReportData]
+    agent_report: AgentReportData
     metadata: PublicationMetadata
     classifications: tuple[SupplementaryClassification, ...]
     summary: CurationSummary
@@ -312,15 +308,12 @@ def _resolve_agent_report_path(
 
 def _write_json(
     path: str | Path,
-    payload: Mapping[str, Any] | CommandResult[Any],
+    payload: Mapping[str, Any],
 ) -> Path:
     destination = Path(path).expanduser().resolve()
     destination.parent.mkdir(parents=True, exist_ok=True)
-    rendered = (
-        payload.to_dict() if isinstance(payload, CommandResult) else dict(payload)
-    )
     destination.write_text(
-        json.dumps(rendered, indent=2, ensure_ascii=False) + os.linesep,
+        json.dumps(dict(payload), indent=2, ensure_ascii=False) + os.linesep,
         encoding="utf-8",
     )
     return destination
@@ -378,21 +371,15 @@ def _build_agent_report(
     *,
     workspace: StudyWorkspace | None,
     inputs: CurationReportInputs,
-    warnings: Sequence[str],
     llm: LlmMetadataExtraction,
     outputs: CurationReportOutputs,
-) -> CommandResult[AgentReportData]:
-    return command_result(
-        "curation-report",
-        status="success",
-        result=AgentReportData(
-            study_id=workspace.study_id if workspace is not None else None,
-            paper_source=inputs.paper_source,
-            supplementary_paths=inputs.supplementary_paths,
-            llm_metadata_extraction=llm,
-            outputs=outputs,
-        ),
-        warnings=warnings,
+) -> AgentReportData:
+    return AgentReportData(
+        study_id=workspace.study_id if workspace is not None else None,
+        paper_source=inputs.paper_source,
+        supplementary_paths=inputs.supplementary_paths,
+        llm_metadata_extraction=llm,
+        outputs=outputs,
     )
 
 
@@ -478,12 +465,9 @@ def run_curation_report(
     agent_report = _build_agent_report(
         workspace=study_workspace,
         inputs=resolved_inputs,
-        warnings=warnings,
         llm=llm,
         outputs=outputs,
     )
-    if agent_report_path is not None:
-        _write_json(agent_report_path, agent_report)
 
     return CurationReportRun(
         report=report,

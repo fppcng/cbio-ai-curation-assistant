@@ -15,12 +15,16 @@ from cbio_curation_assistant.cbioportal.mutations import (
     MafValidationError,
     inspect_maf,
 )
-from cbio_curation_assistant.command_result import CommandStatus
 from cbio_curation_assistant.integrations import genome_nexus
 from cbio_curation_assistant.workspace import StudyWorkspace
 
 
 GenomeBuild: TypeAlias = Literal["GRCh37", "GRCh38"]
+MutationAnnotationStatus: TypeAlias = Literal[
+    "success",
+    "partial_success",
+    "error",
+]
 LOG_FILENAME = "genome_nexus.log"
 
 # Public aliases retained here for callers that already consume the workflow
@@ -135,7 +139,7 @@ class GenomeNexusResult:
 class GenomeNexusRun:
     """Typed workflow outcome before conversion to the command envelope."""
 
-    status: CommandStatus
+    status: MutationAnnotationStatus
     result: GenomeNexusResult | GenomeNexusAttemptArtifacts | None = None
     warnings: tuple[str, ...] = ()
     error: BaseException | None = None
@@ -420,6 +424,7 @@ __all__ = [
     "LOG_FILENAME",
     "MINIMAL_MAF_FILENAME",
     "MafInspection",
+    "MutationAnnotationStatus",
     "OUTPUT_MAF_FILENAME",
     "PipelineError",
     "canonical_paths",

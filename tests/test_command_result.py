@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 
 from cbio_curation_assistant.command_result import (
@@ -10,6 +11,7 @@ from cbio_curation_assistant.command_result import (
     command_error,
     command_result,
     exit_code_for_status,
+    render_command_result,
 )
 
 
@@ -44,6 +46,15 @@ class CommandResultTest(unittest.TestCase):
         self.assertEqual(payload.status, "partial_success")
         self.assertEqual(payload.warnings, ("candidate was not promoted",))
         self.assertIsNone(payload.error)
+
+    def test_render_uses_the_same_stable_json_representation(self) -> None:
+        payload = command_result(
+            "example",
+            status="success",
+            result={"path": "value"},
+        )
+
+        self.assertEqual(json.loads(render_command_result(payload)), payload.to_dict())
 
     def test_error_has_stable_type_and_message_fields(self) -> None:
         payload = command_error("example", RuntimeError("broken"))

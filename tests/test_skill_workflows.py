@@ -230,6 +230,12 @@ class CurationReportWorkflowTest(unittest.TestCase):
                 )
 
             persisted = json.loads(output_json.read_text(encoding="utf-8"))
+            self.assertIsInstance(
+                result.agent_report,
+                curation_report_workflow.AgentReportData,
+            )
+            self.assertIsNotNone(result.outputs.agent_report_json)
+            self.assertFalse(result.outputs.agent_report_json.is_file())
 
         self.assertEqual(result.inputs.paper_source.kind, "xml")
         self.assertEqual(result.summary.files_analysed, 1)

@@ -174,8 +174,6 @@ def _run_workspace_describe(study_id: str) -> int:
         require_manifest=True,
     )
     discovery = workspace.discovery_payload()
-    discovery.pop("schema_version", None)
-    discovery.pop("status", None)
     emit_command_result(
         command_result(
             "workspace.describe",

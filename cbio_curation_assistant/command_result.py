@@ -148,10 +148,17 @@ def exit_code_for_status(status: CommandStatus) -> int:
     return _EXIT_CODES[status]
 
 
+def render_command_result(
+    payload: CommandResult[Any] | Mapping[str, Any],
+) -> str:
+    """Serialize one command response using the stable JSON representation."""
+    rendered = payload.to_dict() if isinstance(payload, CommandResult) else dict(payload)
+    return json.dumps(_json_value(rendered), indent=2, ensure_ascii=False)
+
+
 def emit_command_result(payload: CommandResult[Any] | Mapping[str, Any]) -> None:
     """Print exactly one command response to stdout."""
-    rendered = payload.to_dict() if isinstance(payload, CommandResult) else dict(payload)
-    print(json.dumps(_json_value(rendered), indent=2, ensure_ascii=False))
+    print(render_command_result(payload))
 
 
 __all__ = [
@@ -168,4 +175,5 @@ __all__ = [
     "emit_command_result",
     "error_detail",
     "exit_code_for_status",
+    "render_command_result",
 ]

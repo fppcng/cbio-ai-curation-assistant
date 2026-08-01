@@ -88,6 +88,8 @@ class WorkspaceModelTest(unittest.TestCase):
 
             payload = workspace.discovery_payload()
 
+            self.assertNotIn("schema_version", payload)
+            self.assertNotIn("status", payload)
             self.assertTrue(payload["availability"]["article_pdf"])
             self.assertFalse(payload["availability"]["article_xml"])
             self.assertEqual(

@@ -8,9 +8,8 @@ import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Literal, Mapping
 
-from cbio_curation_assistant.command_result import CommandStatus
 from cbio_curation_assistant.integrations.pmc import (
     PMCRequestError,
     ResolvedStudyIdentifier,
@@ -121,14 +120,14 @@ class StudyDownloadResult:
     warnings: tuple[str, ...] = ()
 
     @property
-    def status(self) -> CommandStatus:
+    def status(self) -> Literal["success", "partial_success"]:
         return "partial_success" if self.warnings else "success"
 
     def _resolved_identifier_dict(self) -> dict[str, str | None]:
         return self.resolved_identifier.to_dict()
 
-    def to_command_data(self) -> dict[str, Any]:
-        """Return command data without envelope or persistence-only fields."""
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the workflow result without persistence-only fields."""
         return {
             "manifest_version": self.schema_version,
             "study_id": self.study_id,
@@ -157,15 +156,11 @@ class StudyDownloadResult:
             "reused": self.reused.to_dict(),
         }
 
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize when nested under the shared command envelope."""
-        return self.to_command_data()
-
     def to_manifest_dict(self) -> dict[str, Any]:
         """Serialize the stable persisted download-manifest schema."""
         return {
             "schema_version": self.schema_version,
-            **self.to_command_data(),
+            **self.to_dict(),
             "status": self.status,
             "success": self.status == "success",
             "warnings": list(self.warnings),

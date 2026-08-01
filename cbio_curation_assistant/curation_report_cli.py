@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 from collections.abc import Sequence
 
 from cbio_curation_assistant.command_result import (
     command_error,
+    command_result,
     emit_command_result,
+    exit_code_for_status,
+    render_command_result,
 )
 from cbio_curation_assistant.llm import resolve_optional_llm_config
 from cbio_curation_assistant.workflows.curation_report import (
@@ -48,8 +52,21 @@ def run_curation_report_command(argv: Sequence[str]) -> int:
         emit_command_result(command_error("curation-report", exc))
         return 1
 
-    emit_command_result(result.agent_report)
-    return 0
+    response = command_result(
+        "curation-report",
+        status="success",
+        result=result.agent_report,
+        warnings=result.warnings,
+    )
+    agent_report_path = result.outputs.agent_report_json
+    if agent_report_path is not None:
+        agent_report_path.parent.mkdir(parents=True, exist_ok=True)
+        agent_report_path.write_text(
+            render_command_result(response) + os.linesep,
+            encoding="utf-8",
+        )
+    emit_command_result(response)
+    return exit_code_for_status(response.status)
 
 
 __all__ = ["run_curation_report_command"]

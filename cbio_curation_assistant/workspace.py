@@ -315,8 +315,6 @@ class StudyWorkspace:
         """Return absolute workspace paths for agent-facing discovery."""
         self.load_manifest()
         return {
-            "schema_version": 1,
-            "status": "success",
             "study_id": self.study_id,
             "workspace": {
                 "root": str(self.root.resolve()),
