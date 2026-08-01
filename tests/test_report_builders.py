@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 from cbio_curation_assistant.publications.models import PublicationMetadata
@@ -14,6 +15,7 @@ from cbio_curation_assistant.reports import (
     save_curation_report_pdf,
 )
 from cbio_curation_assistant.publications import extract_xml_metadata_with_llm
+from cbio_curation_assistant.reports.presentation import build_publication
 
 
 META = {
@@ -113,6 +115,33 @@ class ReportBuilderTest(unittest.TestCase):
             report["supplementary_file_analysis"]["high_priority"],
             1,
         )
+
+    def test_json_report_uses_pdf_presentation_vocabulary(self) -> None:
+        expected_labels = {
+            "YES": "Yes",
+            "PARTIAL": "Partly curatable",
+            "NO": "Needs manual intervention",
+        }
+
+        for curability, expected_label in expected_labels.items():
+            with self.subTest(curability=curability):
+                row = replace(
+                    TYPED_SUMMARY.file_breakdown[0],
+                    curability=curability,
+                )
+                report = build_curation_report_json(
+                    TYPED_META,
+                    replace(TYPED_SUMMARY, file_breakdown=(row,)),
+                )
+                breakdown = report["supplementary_file_analysis"]["file_breakdown"][0]
+
+                self.assertEqual(breakdown["loadable"], expected_label)
+                self.assertEqual(
+                    breakdown["cbioportal_format"],
+                    "data_clinical_sample.txt",
+                )
+
+        self.assertEqual(build_publication(META), "Fixture Journal 2024")
 
     def test_pdf_builder_returns_pdf_bytes_and_save_persists_them(self) -> None:
         rendered = build_curation_report_pdf(META, SUMMARY)

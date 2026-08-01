@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import collections
 import logging
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Literal
 
@@ -17,6 +17,11 @@ from cbio_curation_assistant.publications.models import PublicationMetadata
 from cbio_curation_assistant.reports.models import (
     CurationSummary,
     ReportBreakdownRow,
+)
+from cbio_curation_assistant.reports.presentation import (
+    build_publication,
+    format_curability,
+    format_label,
 )
 from cbio_curation_assistant.supplements.models import SupplementaryClassification
 from cbio_curation_assistant.supplements.readers import read_supplementary_file
@@ -252,28 +257,6 @@ def build_curation_summary(
     )
 
 
-def _format_curability(value: str) -> str:
-    normalized = str(value or "").strip().upper()
-    return {
-        "YES": "Yes",
-        "PARTIAL": "Partially",
-        "NO": "No",
-    }.get(normalized, normalized.title() or "Unknown")
-
-
-def _format_label(value: str) -> str:
-    text = str(value or "").strip().replace("_", " ")
-    return text.title() if text else "Unknown"
-
-
-def _build_publication(metadata: Mapping[str, Any]) -> str:
-    return " ".join(
-        str(item).strip()
-        for item in [metadata.get("journal", ""), metadata.get("year", "")]
-        if str(item).strip()
-    )
-
-
 def build_curation_report_json(
     metadata: PublicationMetadata,
     summary: CurationSummary,
@@ -284,7 +267,7 @@ def build_curation_report_json(
     study_title = (
         meta.get("study_title") or summary_data.get("study_id") or "Untitled study"
     )
-    publication = _build_publication(meta)
+    publication = build_publication(meta)
     citation_bits = [
         publication,
         f"DOI: {meta.get('doi')}" if meta.get("doi") else "",
@@ -335,11 +318,9 @@ def build_curation_report_json(
                 {
                     "file": row.get("file"),
                     "sheet": row.get("sheet"),
-                    "cbioportal_format": _format_label(
-                        str(row.get("cbio_format", "—"))
-                    ),
+                    "cbioportal_format": format_label(str(row.get("cbio_format", "—"))),
                     "confidence_percent": round(float(row.get("confidence", 0) or 0)),
-                    "loadable": _format_curability(str(row.get("curability", ""))),
+                    "loadable": format_curability(str(row.get("curability", ""))),
                     "priority": row.get("priority") or None,
                     "columns_present": row.get("req_present", []) or [],
                     "columns_missing": row.get("req_missing", []) or [],
@@ -351,9 +332,9 @@ def build_curation_report_json(
             {
                 "file": row.get("file"),
                 "sheet": row.get("sheet"),
-                "format": _format_label(str(row.get("cbio_format", "—"))),
+                "format": format_label(str(row.get("cbio_format", "—"))),
                 "confidence_percent": round(float(row.get("confidence", 0) or 0)),
-                "loadable": _format_curability(str(row.get("curability", "—"))),
+                "loadable": format_curability(str(row.get("curability", "—"))),
                 "priority": row.get("priority") or None,
                 "assessment": row.get("verdict") or None,
                 "required_columns_found": row.get("req_present", []) or [],

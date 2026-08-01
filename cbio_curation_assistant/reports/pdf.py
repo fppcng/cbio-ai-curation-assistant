@@ -6,6 +6,12 @@ from pathlib import Path
 from typing import Any
 from xml.sax.saxutils import escape
 
+from cbio_curation_assistant.reports.presentation import (
+    build_publication,
+    format_curability,
+    format_label,
+)
+
 
 def _as_text(value: Any, default: str = "—") -> str:
     if value is None:
@@ -19,21 +25,6 @@ def _join_values(value: Any, default: str = "—") -> str:
         items = [str(item).strip() for item in value if str(item).strip()]
         return ", ".join(items) if items else default
     return _as_text(value, default=default)
-
-
-def _format_curability(value: str) -> str:
-    return {
-        "YES": "Yes",
-        "PARTIAL": "Partly curatable",
-        "NO": "Needs manual intervention",
-    }.get(value, value or "—")
-
-
-def _format_label(value: str) -> str:
-    return {
-        "NOT_LOADABLE": "Needs manual intervention",
-        "Not directly loadable": "Needs manual intervention",
-    }.get(value, value or "—")
 
 
 def _safe_paragraph_text(value: Any) -> str:
@@ -70,14 +61,6 @@ def _priority_palette(value: str) -> tuple[str, str]:
         "N/A": ("#595959", "#F2F2F2"),
         "—": ("#595959", "#F2F2F2"),
     }.get(value, ("#595959", "#F2F2F2"))
-
-
-def _build_publication(meta: dict[str, Any]) -> str:
-    return " ".join(
-        str(item).strip()
-        for item in [meta.get("journal", ""), meta.get("year", "")]
-        if str(item).strip()
-    )
 
 
 def build_curation_report_pdf(meta: dict[str, Any], summary: dict[str, Any]) -> bytes:
@@ -200,7 +183,7 @@ def build_curation_report_pdf(meta: dict[str, Any], summary: dict[str, Any]) -> 
     elements: list[Any] = []
 
     study_title = meta.get("study_title") or summary.get("study_id") or "Untitled study"
-    publication = _build_publication(meta)
+    publication = build_publication(meta)
     citation_bits = [
         publication,
         f"DOI: {meta.get('doi')}" if meta.get("doi") else "",
@@ -287,13 +270,13 @@ def build_curation_report_pdf(meta: dict[str, Any], summary: dict[str, Any]) -> 
         ]
         for row in breakdown:
             confidence_value = float(row.get("confidence", 0) or 0)
-            curability_value = _format_curability(str(row.get("curability", "")))
+            curability_value = format_curability(str(row.get("curability", "")))
             priority_value = _as_text(row.get("priority"), default="N/A")
             table_rows.append(
                 [
                     p(row.get("file"), "BodySmall"),
                     p(row.get("sheet"), "BodySmall"),
-                    p(_format_label(str(row.get("cbio_format", "—"))), "BodySmall"),
+                    p(format_label(str(row.get("cbio_format", "—"))), "BodySmall"),
                     p(f"{confidence_value:.0f}%", "BodySmall"),
                     p(curability_value, "BodySmall"),
                     p(priority_value, "BodySmall"),
@@ -306,7 +289,7 @@ def build_curation_report_pdf(meta: dict[str, Any], summary: dict[str, Any]) -> 
         style_commands: list[tuple[Any, ...]] = []
         for row_index, row in enumerate(breakdown, start=1):
             confidence_value = float(row.get("confidence", 0) or 0)
-            curability_value = _format_curability(str(row.get("curability", "")))
+            curability_value = format_curability(str(row.get("curability", "")))
             priority_value = _as_text(row.get("priority"), default="N/A")
             confidence_text, confidence_bg = _confidence_palette(confidence_value)
             curability_text, curability_bg = _curability_palette(curability_value)
@@ -368,7 +351,7 @@ def build_curation_report_pdf(meta: dict[str, Any], summary: dict[str, Any]) -> 
                 [p("Field", "BodySmall"), p("Value", "BodySmall")],
                 [
                     p("Format", "BodySmall"),
-                    p(_format_label(str(row.get("cbio_format", "—"))), "BodySmall"),
+                    p(format_label(str(row.get("cbio_format", "—"))), "BodySmall"),
                 ],
                 [
                     p("Confidence", "BodySmall"),
@@ -376,7 +359,7 @@ def build_curation_report_pdf(meta: dict[str, Any], summary: dict[str, Any]) -> 
                 ],
                 [
                     p("Loadable", "BodySmall"),
-                    p(_format_curability(str(row.get("curability", "—"))), "BodySmall"),
+                    p(format_curability(str(row.get("curability", "—"))), "BodySmall"),
                 ],
                 [
                     p("Priority", "BodySmall"),
@@ -405,7 +388,7 @@ def build_curation_report_pdf(meta: dict[str, Any], summary: dict[str, Any]) -> 
                 float(row.get("confidence", 0) or 0)
             )
             curability_text, curability_bg = _curability_palette(
-                _format_curability(str(row.get("curability", "—")))
+                format_curability(str(row.get("curability", "—")))
             )
             priority_text, priority_bg = _priority_palette(
                 _as_text(row.get("priority"), default="N/A")

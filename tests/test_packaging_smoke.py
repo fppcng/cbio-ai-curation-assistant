@@ -99,6 +99,7 @@ class InstalledWheelSmokeTest(unittest.TestCase):
                 "cbio_curation_assistant/reports/curation.py",
                 "cbio_curation_assistant/reports/models.py",
                 "cbio_curation_assistant/reports/pdf.py",
+                "cbio_curation_assistant/reports/presentation.py",
                 "cbio_curation_assistant/supplements/formats.py",
                 "cbio_curation_assistant/supplements/readers.py",
                 "cbio_curation_assistant/workflows/study_download.py",
