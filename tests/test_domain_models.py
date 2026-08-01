@@ -59,6 +59,7 @@ class WorkflowModelTest(unittest.TestCase):
         )
 
         self.assertEqual(inputs.paper_source.kind, "xml")
+        self.assertEqual(inputs.supplementary_selection, "explicit")
         self.assertEqual(inputs.to_dict()["paper_pdf_path"], None)
         self.assertEqual(inputs.to_dict()["paper_xml_path"], "/study/article.xml")
 

@@ -31,11 +31,11 @@ from cbio_curation_assistant.workspace import (
 
 
 _SCRIPT_COMMANDS: dict[str, str] = {
-    "curation-report": "hermes_skills/abstractor-curation-report-generation/scripts/abstractor_report_generator.py",
     "genome-nexus": "hermes_skills/curator-mutation-data-file-creation/scripts/run_genome_nexus.py",
 }
 _DIRECT_COMMANDS = (
     "clinical-dictionary",
+    "curation-report",
     "oncotree-search",
     "study-download",
     "validate-study",
@@ -241,6 +241,14 @@ def _run_study_download(script_args: Sequence[str]) -> int:
     return run_study_download_command(script_args)
 
 
+def _run_curation_report(script_args: Sequence[str]) -> int:
+    from cbio_curation_assistant.curation_report_cli import (
+        run_curation_report_command,
+    )
+
+    return run_curation_report_command(script_args)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -256,6 +264,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _run_workspace(args.args)
         if args.command == "study-download":
             return _run_study_download(args.args)
+        if args.command == "curation-report":
+            return _run_curation_report(args.args)
         if args.command == "clinical-dictionary":
             return run_clinical_dictionary_command(args.args)
         if args.command == "oncotree-search":

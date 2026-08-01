@@ -10,8 +10,8 @@ import pandas as pd
 from docx import Document
 from reportlab.pdfgen import canvas
 
-from cbio_curation_assistant import cbioportal_curator as curator
 from cbio_curation_assistant.cbioportal.classification import ClassificationResult
+from cbio_curation_assistant.reports import curation as report_curation
 from cbio_curation_assistant.supplements import readers
 from cbio_curation_assistant.supplements.readers import (
     EmptySupplementaryFileError,
@@ -279,9 +279,13 @@ class SupplementReaderTest(unittest.TestCase):
         )
         warnings: list[str] = []
         with (
-            patch.object(curator, "read_supplementary_file", return_value=read_result),
             patch.object(
-                curator.specification_sources,
+                report_curation,
+                "read_supplementary_file",
+                return_value=read_result,
+            ),
+            patch.object(
+                report_curation.specification_sources,
                 "get_embedded_spec",
                 return_value={
                     "specs": [],
@@ -291,12 +295,12 @@ class SupplementReaderTest(unittest.TestCase):
                 },
             ),
             patch.object(
-                curator,
+                report_curation,
                 "classify_sheet",
                 return_value=classification_result(),
             ),
         ):
-            records = curator.analyse_supplementary_files(
+            records = report_curation.analyse_supplementary_files(
                 ["/tmp/source.xlsx"],
                 warnings=warnings,
             )
@@ -315,13 +319,11 @@ class SupplementReaderTest(unittest.TestCase):
         self,
     ) -> None:
         with patch.object(
-            curator,
+            report_curation,
             "read_supplementary_file",
             side_effect=SupplementaryParseError("cannot parse"),
         ):
-            records = curator.analyse_supplementary_files(
-                ["/tmp/broken.xlsx"]
-            )
+            records = report_curation.analyse_supplementary_files(["/tmp/broken.xlsx"])
 
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0].classification, "NOT_LOADABLE")

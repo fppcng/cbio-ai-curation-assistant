@@ -4,7 +4,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from cbio_curation_assistant.pdf_report import (
+from cbio_curation_assistant.publications.models import PublicationMetadata
+from cbio_curation_assistant.reports import (
+    CurationSummary,
+    ReportBreakdownRow,
     build_curation_report_filename,
     build_curation_report_json,
     build_curation_report_pdf,
@@ -63,10 +66,35 @@ SUMMARY = {
     ],
 }
 
+TYPED_META = PublicationMetadata.from_mapping(META)
+TYPED_SUMMARY = CurationSummary(
+    study_id="luad_smith_2024",
+    cancer_type="luad",
+    num_samples=2,
+    reference_genome="hg38",
+    files_analysed=1,
+    sheets_analysed=1,
+    high_priority=1,
+    medium_priority=0,
+    not_loadable=0,
+    file_breakdown=(
+        ReportBreakdownRow(
+            file="table.csv",
+            sheet="Sheet1",
+            cbio_format="data_clinical_sample.txt",
+            curability="YES",
+            priority="HIGH",
+            confidence=70,
+            verdict="fixture",
+            required_present=("patient_id", "sample_id"),
+        ),
+    ),
+)
+
 
 class ReportBuilderTest(unittest.TestCase):
     def test_json_report_has_stable_top_level_sections(self) -> None:
-        report = build_curation_report_json(META, SUMMARY)
+        report = build_curation_report_json(TYPED_META, TYPED_SUMMARY)
 
         self.assertEqual(
             set(report),

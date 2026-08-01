@@ -10,17 +10,17 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from cbio_curation_assistant import study_download_cli
+from cbio_curation_assistant import curation_report_cli, study_download_cli
 from cbio_curation_assistant.integrations.pmc import PMCErrorClassification
+from cbio_curation_assistant.supplements.models import SupplementaryClassification
 from cbio_curation_assistant.workspace import StudyWorkspace
+from cbio_curation_assistant.workflows import (
+    curation_report as curation_report_workflow,
+)
 from cbio_curation_assistant.workflows import study_download as study_download_workflow
 from tests.script_loader import load_script_module
 
 
-REPORT_SCRIPT = (
-    "hermes_skills/abstractor-curation-report-generation/scripts/"
-    "abstractor_report_generator.py"
-)
 GENOME_NEXUS_SCRIPT = (
     "hermes_skills/curator-mutation-data-file-creation/scripts/run_genome_nexus.py"
 )
@@ -153,18 +153,13 @@ class StudyDownloadWorkflowTest(unittest.TestCase):
 
 
 class CurationReportWorkflowTest(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.workflow = load_script_module(
-            "curation_report_characterization",
-            REPORT_SCRIPT,
-        )
-
     def test_orchestrator_builds_outputs_from_local_xml_and_supplements(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
             xml_path = root / "article.xml"
-            xml_path.write_text("<article><body><p>text</p></body></article>", encoding="utf-8")
+            xml_path.write_text(
+                "<article><body><p>text</p></body></article>", encoding="utf-8"
+            )
             supplement = root / "table.csv"
             supplement.write_text("sample,value\nS1,1\n", encoding="utf-8")
             output_pdf = root / "report.pdf"
@@ -176,21 +171,19 @@ class CurationReportWorkflowTest(unittest.TestCase):
                 "reference_genome": "hg38",
                 "study_id_suggestion": "luad_fixture_2024",
             }
-            records = [
-                {
-                    "file": "table.csv",
-                    "sheet": "Sheet1",
-                    "classification": "CLINICAL_SAMPLE",
-                    "cbio_target_file": "data_clinical_sample.txt",
-                    "curability": "YES",
-                    "priority": "HIGH",
-                    "confidence": 70,
-                    "verdict": "fixture",
-                    "required_present": ["sample_id"],
-                    "required_missing": [],
-                    "optional_present": [],
-                }
-            ]
+            records = (
+                SupplementaryClassification(
+                    file="table.csv",
+                    sheet="Sheet1",
+                    classification="CLINICAL_SAMPLE",
+                    cbio_target_file="data_clinical_sample.txt",
+                    curability="YES",
+                    priority="HIGH",
+                    confidence=70,
+                    verdict="fixture",
+                    required_present=("sample_id",),
+                ),
+            )
 
             def save_pdf(meta: dict, summary: dict, path: str) -> str:
                 Path(path).write_bytes(b"%PDF-fixture")
@@ -198,34 +191,34 @@ class CurationReportWorkflowTest(unittest.TestCase):
 
             with (
                 patch.object(
-                    self.workflow,
-                    "resolve_optional_hermes_llm_config",
-                    return_value=None,
-                ),
-                patch.object(
-                    self.workflow,
+                    curation_report_workflow,
                     "extract_xml_metadata_with_llm",
                     return_value=metadata,
                 ),
                 patch.object(
-                    self.workflow,
+                    curation_report_workflow,
                     "analyse_supplementary_files",
                     return_value=records,
                 ),
                 patch.object(
-                    self.workflow,
+                    curation_report_workflow,
                     "save_curation_report_pdf",
                     side_effect=save_pdf,
                 ),
                 patch.object(
-                    self.workflow,
+                    curation_report_workflow,
                     "build_curation_report_json",
                     return_value={"report_title": "Fixture"},
                 ),
             ):
-                result = self.workflow.run_curation_orchestrator(
-                    paper_xml_path=str(xml_path),
-                    supplementary_paths=[supplement],
+                result = curation_report_workflow.run_curation_report(
+                    curation_report_workflow.CurationReportInputs(
+                        paper_source=curation_report_workflow.PaperSource(
+                            kind="xml",
+                            path=xml_path,
+                        ),
+                        supplementary_paths=(supplement,),
+                    ),
                     output_pdf_path=str(output_pdf),
                     output_json_path=str(output_json),
                 )
@@ -242,14 +235,19 @@ class CurationReportWorkflowTest(unittest.TestCase):
         stdout = io.StringIO()
         with (
             patch.object(
-                self.workflow,
-                "_resolve_study_inputs",
+                curation_report_cli,
+                "run_curation_report_for_study",
                 side_effect=FileNotFoundError("missing"),
             ),
-            patch.object(self.workflow.logger, "error") as error_log,
+            patch.object(
+                curation_report_cli, "resolve_optional_llm_config", return_value=None
+            ),
+            patch.object(curation_report_cli.logger, "error") as error_log,
             contextlib.redirect_stdout(stdout),
         ):
-            code = self.workflow.main(["--study-id", "pmc123"])
+            code = curation_report_cli.run_curation_report_command(
+                ["--study-id", "pmc123"]
+            )
 
         self.assertEqual(code, 1)
         payload = json.loads(stdout.getvalue())

@@ -45,6 +45,14 @@ class CliDispatchTest(unittest.TestCase):
             ["--identifier", "PMC123", "--identifier-type", "pmcid"]
         )
 
+    def test_curation_report_uses_direct_package_dispatch(self) -> None:
+        self.assertNotIn("curation-report", cli._SCRIPT_COMMANDS)
+        with patch.object(cli, "_run_curation_report", return_value=7) as report:
+            code = cli.main(["curation-report", "--study-id", "pmc123"])
+
+        self.assertEqual(code, 7)
+        report.assert_called_once_with(["--study-id", "pmc123"])
+
     def test_validate_command_uses_dedicated_dispatch(self) -> None:
         with patch.object(cli, "_run_validate_study", return_value=3) as validate:
             code = cli.main(["validate-study", "--study-id", "pmc1"])

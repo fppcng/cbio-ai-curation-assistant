@@ -1,6 +1,6 @@
 ---
 name: abstractor-curation-report-generation
-description: Use this skill when asked to generate or regenerate a cBioPortal curation report PDF from local paper XML/PDF inputs and a chosen set of local supplementary files, using the repository deterministic report-generation script.
+description: Use this skill when asked to generate or regenerate a cBioPortal curation report PDF from canonical local paper and supplementary inputs through the package workflow.
 required_environment_variables:
   - name: CBIO_CURATION_ASSISTANT_HOME
     prompt: Absolute path to the cBioPortal AI Curation Assistant installation directory
@@ -15,7 +15,7 @@ Use this skill when the user asks or you need to generate or regenerate a cBioPo
 - Never invent paper or supplementary paths. Use only files that exist locally.
 - Discover study workspace paths through `cbio-curation workspace describe --study-id <study_id>` before inspecting files.
 - Run report generation with only `--study-id`; let project code resolve canonical inputs and outputs.
-- Use the agent report JSON printed by the script as the source of truth for user-facing status.
+- Use the agent report JSON printed by the package command as the source of truth for user-facing status.
 - Do not summarize sources, supplementary files, LLM use, warnings, or output paths from ad hoc inspection when the agent report is available.
 
 ## Procedure
@@ -35,8 +35,8 @@ uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation curation-report \
 6. Verify any output files you mention using the paths in `result.outputs`.
 7. Report the run to the user using the agent report fields.
 
-## What the script owns
-The script deterministically handles:
+## What the package workflow owns
+The package workflow deterministically handles:
 - workspace loading and validation using `--study-id`
 - article-source selection
 - supplementary-file discovery

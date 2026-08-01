@@ -63,6 +63,7 @@ class InstalledWheelSmokeTest(unittest.TestCase):
                 "cbio_curation_assistant/cbioportal/specification_sources.py",
                 "cbio_curation_assistant/cbioportal/specs.py",
                 "cbio_curation_assistant/cbioportal_spec.py",
+                "cbio_curation_assistant/curation_report_cli.py",
                 "cbio_curation_assistant/integrations/pmc/__init__.py",
                 "cbio_curation_assistant/integrations/pmc/archives.py",
                 "cbio_curation_assistant/integrations/pmc/client.py",
@@ -82,12 +83,17 @@ class InstalledWheelSmokeTest(unittest.TestCase):
                 "cbio_curation_assistant/publications/models.py",
                 "cbio_curation_assistant/publications/pdf.py",
                 "cbio_curation_assistant/publications/xml.py",
+                "cbio_curation_assistant/reports/__init__.py",
+                "cbio_curation_assistant/reports/curation.py",
+                "cbio_curation_assistant/reports/models.py",
+                "cbio_curation_assistant/reports/pdf.py",
                 "cbio_curation_assistant/spec_fetcher.py",
                 "cbio_curation_assistant/spec_match.py",
                 "cbio_curation_assistant/study_download_cli.py",
                 "cbio_curation_assistant/supplements/formats.py",
                 "cbio_curation_assistant/supplements/readers.py",
                 "cbio_curation_assistant/workflows/study_download.py",
+                "cbio_curation_assistant/workflows/curation_report.py",
             ):
                 with self.subTest(module_path=module_path):
                     self.assertIn(module_path, names)
@@ -176,6 +182,25 @@ class InstalledWheelSmokeTest(unittest.TestCase):
             self.assertIn(
                 "cbio-curation study-download",
                 study_download_help.stdout,
+            )
+
+            curation_report_help = subprocess.run(
+                [str(command), "curation-report", "--help"],
+                cwd=root,
+                env=help_environment,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            self.assertEqual(
+                curation_report_help.returncode,
+                0,
+                curation_report_help.stderr,
+            )
+            self.assertIn(
+                "cbio-curation curation-report",
+                curation_report_help.stdout,
             )
 
             llm_import = subprocess.run(
