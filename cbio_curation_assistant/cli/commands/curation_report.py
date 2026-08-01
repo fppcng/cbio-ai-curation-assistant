@@ -1,26 +1,20 @@
-"""Command-line adapter for the package-owned curation-report workflow."""
+"""Command adapter for the package-owned curation-report workflow."""
 
 from __future__ import annotations
 
 import argparse
-import logging
 import os
 from collections.abc import Sequence
 
-from cbio_curation_assistant.command_result import (
-    command_error,
+from cbio_curation_assistant.cli.result import (
+    CommandResult,
     command_result,
-    emit_command_result,
-    exit_code_for_status,
     render_command_result,
 )
 from cbio_curation_assistant.llm import resolve_optional_llm_config
 from cbio_curation_assistant.workflows.curation_report import (
     run_curation_report_for_study,
 )
-
-
-logger = logging.getLogger(__name__)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -39,19 +33,13 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def run_curation_report_command(argv: Sequence[str]) -> int:
-    """Parse arguments, invoke the report workflow, and emit its result."""
+def run(argv: Sequence[str]) -> CommandResult[object]:
+    """Parse arguments, invoke the report workflow, and return its result."""
     args = _build_parser().parse_args(argv)
-    try:
-        result = run_curation_report_for_study(
-            args.study_id,
-            llm_config=resolve_optional_llm_config(),
-        )
-    except Exception as exc:
-        logger.error("%s", exc)
-        emit_command_result(command_error("curation-report", exc))
-        return 1
-
+    result = run_curation_report_for_study(
+        args.study_id,
+        llm_config=resolve_optional_llm_config(),
+    )
     response = command_result(
         "curation-report",
         status="success",
@@ -65,8 +53,7 @@ def run_curation_report_command(argv: Sequence[str]) -> int:
             render_command_result(response) + os.linesep,
             encoding="utf-8",
         )
-    emit_command_result(response)
-    return exit_code_for_status(response.status)
+    return response
 
 
-__all__ = ["run_curation_report_command"]
+__all__ = ["run"]

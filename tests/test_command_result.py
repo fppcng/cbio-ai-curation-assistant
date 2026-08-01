@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import unittest
 
-from cbio_curation_assistant.command_result import (
+from cbio_curation_assistant.cli.result import (
     EXIT_ERROR,
     EXIT_PARTIAL_SUCCESS,
     EXIT_SUCCESS,

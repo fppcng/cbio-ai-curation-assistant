@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import contextlib
+import io
+import json
 import os
 import subprocess
 import tempfile
@@ -8,6 +11,7 @@ from pathlib import Path
 from unittest.mock import ANY, patch
 
 from cbio_curation_assistant import cli
+from cbio_curation_assistant.cli.commands import validate_study
 
 
 class ValidatorRuntimeTest(unittest.TestCase):
@@ -27,16 +31,16 @@ class ValidatorRuntimeTest(unittest.TestCase):
             root = Path(tmp_dir)
             validator_root, script_path = self._validator_checkout(root)
             with (
-                patch.object(cli, "_assistant_home", return_value=root),
-                patch.object(cli.shutil, "which", return_value="/usr/bin/uv"),
+                patch.object(validate_study, "assistant_home", return_value=root),
+                patch.object(validate_study.shutil, "which", return_value="/usr/bin/uv"),
                 patch.dict(os.environ, {"VIRTUAL_ENV": "/main/.venv"}),
                 patch.object(
-                    cli.subprocess,
+                    validate_study.subprocess,
                     "run",
                     return_value=subprocess.CompletedProcess([], 3),
                 ) as run,
             ):
-                code = cli._run_validate_study(
+                code = validate_study.run(
                     [
                         "--study-id",
                         "PMC1",
@@ -54,7 +58,7 @@ class ValidatorRuntimeTest(unittest.TestCase):
                     str(validator_root),
                     "--frozen",
                     "--python",
-                    cli.sys.executable,
+                    validate_study.sys.executable,
                     "python",
                     str(script_path),
                     "-s",
@@ -82,11 +86,11 @@ class ValidatorRuntimeTest(unittest.TestCase):
             root = Path(tmp_dir)
             self._validator_checkout(root)
             with (
-                patch.object(cli, "_assistant_home", return_value=root),
-                patch.object(cli.shutil, "which", return_value=None),
+                patch.object(validate_study, "assistant_home", return_value=root),
+                patch.object(validate_study.shutil, "which", return_value=None),
                 self.assertRaisesRegex(RuntimeError, "uv executable is required"),
             ):
-                cli._run_validate_study(["--study-id", "pmc1"])
+                validate_study.run(["--study-id", "pmc1"])
 
             self.assertFalse((root / "studies/pmc1/validation").exists())
 
@@ -94,15 +98,33 @@ class ValidatorRuntimeTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
             with (
-                patch.object(cli, "_assistant_home", return_value=root),
+                patch.object(validate_study, "assistant_home", return_value=root),
                 self.assertRaisesRegex(
                     FileNotFoundError,
                     "validator project not found",
                 ),
             ):
-                cli._run_validate_study(["--study-id", "pmc1"])
+                validate_study.run(["--study-id", "pmc1"])
 
             self.assertFalse((root / "studies/pmc1/validation").exists())
+
+    def test_validate_study_setup_failure_uses_shared_error_boundary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            stdout = io.StringIO()
+            with (
+                patch.object(
+                    validate_study,
+                    "assistant_home",
+                    return_value=Path(tmp_dir),
+                ),
+                contextlib.redirect_stdout(stdout),
+            ):
+                code = cli.main(["validate-study", "--study-id", "pmc1"])
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(code, 1)
+        self.assertEqual(payload["command"], "validate-study")
+        self.assertEqual(payload["error"]["type"], "FileNotFoundError")
 
 
 if __name__ == "__main__":

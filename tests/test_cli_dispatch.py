@@ -4,9 +4,10 @@ import contextlib
 import io
 import json
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from cbio_curation_assistant import cli
+from cbio_curation_assistant.cli.main import CommandSpec
 
 
 class CliDispatchTest(unittest.TestCase):
@@ -19,7 +20,8 @@ class CliDispatchTest(unittest.TestCase):
         self.assertIn("usage: cbio-curation", stdout.getvalue())
 
     def test_study_download_uses_direct_package_dispatch(self) -> None:
-        with patch.object(cli, "_run_study_download", return_value=7) as download:
+        download = Mock(return_value=7)
+        with patch.object(CommandSpec, "load", return_value=download):
             code = cli.main(
                 [
                     "study-download",
@@ -36,14 +38,16 @@ class CliDispatchTest(unittest.TestCase):
         )
 
     def test_curation_report_uses_direct_package_dispatch(self) -> None:
-        with patch.object(cli, "_run_curation_report", return_value=7) as report:
+        report = Mock(return_value=7)
+        with patch.object(CommandSpec, "load", return_value=report):
             code = cli.main(["curation-report", "--study-id", "pmc123"])
 
         self.assertEqual(code, 7)
         report.assert_called_once_with(["--study-id", "pmc123"])
 
     def test_genome_nexus_uses_direct_package_dispatch(self) -> None:
-        with patch.object(cli, "_run_genome_nexus", return_value=7) as annotation:
+        annotation = Mock(return_value=7)
+        with patch.object(CommandSpec, "load", return_value=annotation):
             code = cli.main(
                 [
                     "genome-nexus",
@@ -60,14 +64,16 @@ class CliDispatchTest(unittest.TestCase):
         )
 
     def test_validate_command_uses_dedicated_dispatch(self) -> None:
-        with patch.object(cli, "_run_validate_study", return_value=3) as validate:
+        validate = Mock(return_value=3)
+        with patch.object(CommandSpec, "load", return_value=validate):
             code = cli.main(["validate-study", "--study-id", "pmc1"])
 
         self.assertEqual(code, 3)
         validate.assert_called_once_with(["--study-id", "pmc1"])
 
     def test_workspace_command_uses_dedicated_dispatch(self) -> None:
-        with patch.object(cli, "_run_workspace", return_value=0) as workspace:
+        workspace = Mock(return_value=0)
+        with patch.object(CommandSpec, "load", return_value=workspace):
             code = cli.main(["workspace", "describe", "--study-id", "pmc1"])
 
         self.assertEqual(code, 0)
@@ -76,11 +82,8 @@ class CliDispatchTest(unittest.TestCase):
     def test_unexpected_command_failure_is_rendered_as_json(self) -> None:
         stdout = io.StringIO()
         stderr = io.StringIO()
-        with patch.object(
-            cli,
-            "_run_study_download",
-            side_effect=RuntimeError("broken"),
-        ):
+        failed = Mock(side_effect=RuntimeError("broken"))
+        with patch.object(CommandSpec, "load", return_value=failed):
             with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
                 code = cli.main(["study-download"])
 
@@ -94,23 +97,25 @@ class CliDispatchTest(unittest.TestCase):
             {"type": "RuntimeError", "message": "broken"},
         )
 
+    def test_command_argument_errors_keep_argparse_contract(self) -> None:
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr), self.assertRaises(SystemExit) as raised:
+            cli.main(["workspace"])
+
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn("cbio-curation workspace", stderr.getvalue())
+
     def test_oncotree_search_uses_direct_package_dispatch(self) -> None:
-        with patch.object(
-            cli,
-            "run_oncotree_search_command",
-            return_value=7,
-        ) as run:
+        run = Mock(return_value=7)
+        with patch.object(CommandSpec, "load", return_value=run):
             code = cli.main(["oncotree-search", "--query", "LUAD", "--json"])
 
         self.assertEqual(code, 7)
         run.assert_called_once_with(["--query", "LUAD", "--json"])
 
     def test_clinical_dictionary_uses_direct_package_dispatch(self) -> None:
-        with patch.object(
-            cli,
-            "run_clinical_dictionary_command",
-            return_value=7,
-        ) as run:
+        run = Mock(return_value=7)
+        with patch.object(CommandSpec, "load", return_value=run):
             code = cli.main(
                 [
                     "clinical-dictionary",

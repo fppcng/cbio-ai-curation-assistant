@@ -9,7 +9,10 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from cbio_curation_assistant import curation_report_cli
+from cbio_curation_assistant import cli
+from cbio_curation_assistant.cli.commands import (
+    curation_report as curation_report_command,
+)
 from cbio_curation_assistant.supplements.models import SupplementaryClassification
 from cbio_curation_assistant.workspace import ENV_VAR_NAME, StudyWorkspace
 from cbio_curation_assistant.workflows import curation_report
@@ -34,7 +37,7 @@ class AgentReportCliTest(unittest.TestCase):
             stdout = io.StringIO()
             with mock.patch.dict(os.environ, {ENV_VAR_NAME: str(home)}, clear=False):
                 with mock.patch.object(
-                    curation_report_cli,
+                    curation_report_command,
                     "resolve_optional_llm_config",
                     return_value=None,
                 ):
@@ -70,8 +73,12 @@ class AgentReportCliTest(unittest.TestCase):
                                     return_value={"report_title": "Test report"},
                                 ):
                                     with contextlib.redirect_stdout(stdout):
-                                        code = curation_report_cli.run_curation_report_command(
-                                            ["--study-id", workspace.study_id]
+                                        code = cli.main(
+                                            [
+                                                "curation-report",
+                                                "--study-id",
+                                                workspace.study_id,
+                                            ]
                                         )
 
             self.assertEqual(code, 0)

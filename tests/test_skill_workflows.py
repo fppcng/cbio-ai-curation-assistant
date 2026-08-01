@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import contextlib
 import io
 import json
@@ -10,17 +9,21 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from cbio_curation_assistant import (
-    curation_report_cli,
-    genome_nexus_cli,
-    study_download_cli,
+from cbio_curation_assistant import cli
+from cbio_curation_assistant.cli.commands import (
+    curation_report as curation_report_command,
+    genome_nexus as genome_nexus_command,
+    study_download as study_download_command,
 )
 from cbio_curation_assistant.cbioportal.mutations import (
     MafValidationError,
     inspect_maf,
 )
 from cbio_curation_assistant.integrations import genome_nexus
-from cbio_curation_assistant.integrations.pmc import PMCErrorClassification
+from cbio_curation_assistant.integrations.pmc import (
+    PMCErrorClassification,
+    PMCRequestError,
+)
 from cbio_curation_assistant.supplements.models import SupplementaryClassification
 from cbio_curation_assistant.workspace import StudyWorkspace
 from cbio_curation_assistant.workflows import (
@@ -94,7 +97,7 @@ class StudyDownloadWorkflowTest(unittest.TestCase):
         self.assertEqual(persisted, result.to_manifest_dict())
 
     def test_main_renders_pmc_errors_as_json(self) -> None:
-        error = study_download_cli.PMCRequestError(
+        error = PMCRequestError(
             operation="download",
             classification=PMCErrorClassification(
                 category="remote_not_found",
@@ -104,22 +107,23 @@ class StudyDownloadWorkflowTest(unittest.TestCase):
             detail="missing",
         )
         stdout = io.StringIO()
-        args = argparse.Namespace(
-            identifier="PMC123",
-            identifier_type="pmcid",
-            log_level="INFO",
-        )
         with (
-            patch.object(study_download_cli, "_build_parser") as parser,
             patch.object(
-                study_download_cli,
+                study_download_command,
                 "run_study_download",
                 side_effect=error,
             ),
             contextlib.redirect_stdout(stdout),
         ):
-            parser.return_value.parse_args.return_value = args
-            code = study_download_cli.run_study_download_command([])
+            code = cli.main(
+                [
+                    "study-download",
+                    "--identifier",
+                    "PMC123",
+                    "--identifier-type",
+                    "pmcid",
+                ]
+            )
 
         payload = json.loads(stdout.getvalue())
         self.assertEqual(code, 1)
@@ -134,22 +138,23 @@ class StudyDownloadWorkflowTest(unittest.TestCase):
             to_dict=lambda: {"study_id": "pmc123"},
         )
         stdout = io.StringIO()
-        args = argparse.Namespace(
-            identifier="PMC123",
-            identifier_type="pmcid",
-            log_level="INFO",
-        )
         with (
-            patch.object(study_download_cli, "_build_parser") as parser,
             patch.object(
-                study_download_cli,
+                study_download_command,
                 "run_study_download",
                 return_value=download_result,
             ),
             contextlib.redirect_stdout(stdout),
         ):
-            parser.return_value.parse_args.return_value = args
-            code = study_download_cli.run_study_download_command([])
+            code = cli.main(
+                [
+                    "study-download",
+                    "--identifier",
+                    "PMC123",
+                    "--identifier-type",
+                    "pmcid",
+                ]
+            )
 
         payload = json.loads(stdout.getvalue())
         self.assertEqual(code, 3)
@@ -247,19 +252,18 @@ class CurationReportWorkflowTest(unittest.TestCase):
         stdout = io.StringIO()
         with (
             patch.object(
-                curation_report_cli,
+                curation_report_command,
                 "run_curation_report_for_study",
                 side_effect=FileNotFoundError("missing"),
             ),
             patch.object(
-                curation_report_cli, "resolve_optional_llm_config", return_value=None
+                curation_report_command,
+                "resolve_optional_llm_config",
+                return_value=None,
             ),
-            patch.object(curation_report_cli.logger, "error") as error_log,
             contextlib.redirect_stdout(stdout),
         ):
-            code = curation_report_cli.run_curation_report_command(
-                ["--study-id", "pmc123"]
-            )
+            code = cli.main(["curation-report", "--study-id", "pmc123"])
 
         self.assertEqual(code, 1)
         payload = json.loads(stdout.getvalue())
@@ -269,9 +273,6 @@ class CurationReportWorkflowTest(unittest.TestCase):
             payload["error"],
             {"type": "FileNotFoundError", "message": "missing"},
         )
-        error_log.assert_called_once()
-        self.assertEqual(error_log.call_args.args[0], "%s")
-        self.assertEqual(str(error_log.call_args.args[1]), "missing")
 
 
 class GenomeNexusWorkflowTest(unittest.TestCase):
@@ -324,14 +325,15 @@ class GenomeNexusWorkflowTest(unittest.TestCase):
         )
         with (
             patch.object(
-                genome_nexus_cli,
+                genome_nexus_command,
                 "run_genome_nexus_annotation",
                 return_value=workflow_run,
             ) as run_annotation,
             contextlib.redirect_stdout(stdout),
         ):
-            code = genome_nexus_cli.run_genome_nexus_command(
+            code = cli.main(
                 [
+                    "genome-nexus",
                     "--study-id",
                     "missing",
                     "--genome-build",
@@ -409,14 +411,15 @@ class GenomeNexusWorkflowTest(unittest.TestCase):
                 stdout = io.StringIO()
                 with (
                     patch.object(
-                        genome_nexus_cli,
+                        genome_nexus_command,
                         "run_genome_nexus_annotation",
                         return_value=workflow_run,
                     ),
                     contextlib.redirect_stdout(stdout),
                 ):
-                    code = genome_nexus_cli.run_genome_nexus_command(
+                    code = cli.main(
                         [
+                            "genome-nexus",
                             "--study-id",
                             "pmc123",
                             "--genome-build",

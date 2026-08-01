@@ -1,4 +1,4 @@
-"""Command-line adapter for the package-owned Genome Nexus workflow."""
+"""Command adapter for the package-owned Genome Nexus workflow."""
 
 from __future__ import annotations
 
@@ -6,11 +6,10 @@ import argparse
 import os
 from collections.abc import Sequence
 
-from cbio_curation_assistant.command_result import (
+from cbio_curation_assistant.cli.result import (
+    CommandResult,
     command_error,
     command_result,
-    emit_command_result,
-    exit_code_for_status,
 )
 from cbio_curation_assistant.workflows.mutation_annotation import (
     DEFAULT_IMAGE,
@@ -53,37 +52,29 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def run_genome_nexus_command(argv: Sequence[str]) -> int:
-    """Parse arguments, invoke annotation, and emit one structured result."""
+def run(argv: Sequence[str]) -> CommandResult[object]:
+    """Parse arguments and translate the workflow state into a command result."""
     args = _build_parser().parse_args(argv)
-    try:
-        run = run_genome_nexus_annotation(
-            study_id=args.study_id,
-            genome_build=args.genome_build,
-            image=args.image,
-            timeout=args.timeout,
-            force=args.force,
+    annotation = run_genome_nexus_annotation(
+        study_id=args.study_id,
+        genome_build=args.genome_build,
+        image=args.image,
+        timeout=args.timeout,
+        force=args.force,
+    )
+    if annotation.status == "error":
+        return command_error(
+            "genome-nexus",
+            annotation.error or "Genome Nexus annotation failed.",
+            result=annotation.result,
+            warnings=annotation.warnings,
         )
-    except Exception as exc:  # Defensive command-boundary fallback.
-        response = command_error("genome-nexus", exc)
-    else:
-        if run.status == "error":
-            response = command_error(
-                "genome-nexus",
-                run.error or "Genome Nexus annotation failed.",
-                result=run.result,
-                warnings=run.warnings,
-            )
-        else:
-            response = command_result(
-                "genome-nexus",
-                status=run.status,
-                result=run.result,
-                warnings=run.warnings,
-            )
-
-    emit_command_result(response)
-    return exit_code_for_status(response.status)
+    return command_result(
+        "genome-nexus",
+        status=annotation.status,
+        result=annotation.result,
+        warnings=annotation.warnings,
+    )
 
 
-__all__ = ["run_genome_nexus_command"]
+__all__ = ["run"]

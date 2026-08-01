@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from cbio_curation_assistant.command_result import command_result
+from cbio_curation_assistant.cli.result import command_result
 from cbio_curation_assistant.integrations.pmc import ResolvedStudyIdentifier
 from cbio_curation_assistant.publications.models import PublicationMetadata
 from cbio_curation_assistant.supplements.models import SupplementaryClassification

@@ -64,7 +64,7 @@ def _json_value(value: Any) -> Any:
 
 @dataclass(frozen=True, slots=True)
 class CommandResult(Generic[ResultT]):
-    """Typed command response serialized only when emitted or persisted."""
+    """Typed command response serialized only at the outer CLI boundary."""
 
     command: str
     status: CommandStatus
@@ -88,6 +88,9 @@ class CommandResult(Generic[ResultT]):
             "warnings": list(self.warnings),
             "error": self.error.to_dict() if self.error is not None else None,
         }
+
+
+CommandOutcome: TypeAlias = CommandResult[Any] | int
 
 
 def error_detail(error: BaseException | str) -> CommandErrorDetail:
@@ -135,7 +138,7 @@ def command_error(
 ) -> CommandResult[Any]:
     """Build an error response."""
     return command_result(
-        command,
+        command=command,
         status="error",
         result=result,
         warnings=warnings,
@@ -152,7 +155,9 @@ def render_command_result(
     payload: CommandResult[Any] | Mapping[str, Any],
 ) -> str:
     """Serialize one command response using the stable JSON representation."""
-    rendered = payload.to_dict() if isinstance(payload, CommandResult) else dict(payload)
+    rendered = (
+        payload.to_dict() if isinstance(payload, CommandResult) else dict(payload)
+    )
     return json.dumps(_json_value(rendered), indent=2, ensure_ascii=False)
 
 
@@ -164,6 +169,7 @@ def emit_command_result(payload: CommandResult[Any] | Mapping[str, Any]) -> None
 __all__ = [
     "CommandStatus",
     "CommandErrorDetail",
+    "CommandOutcome",
     "CommandResult",
     "EXIT_ERROR",
     "EXIT_PARTIAL_SUCCESS",

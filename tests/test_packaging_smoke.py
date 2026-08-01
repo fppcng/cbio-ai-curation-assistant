@@ -57,13 +57,24 @@ class InstalledWheelSmokeTest(unittest.TestCase):
             wheel = wheels[0]
             with zipfile.ZipFile(wheel) as archive:
                 names = archive.namelist()
-            self.assertIn("cbio_curation_assistant/cli.py", names)
             for module_path in (
+                "cbio_curation_assistant/cli/__init__.py",
+                "cbio_curation_assistant/cli/environment.py",
+                "cbio_curation_assistant/cli/json_io.py",
+                "cbio_curation_assistant/cli/main.py",
+                "cbio_curation_assistant/cli/result.py",
+                "cbio_curation_assistant/cli/commands/clinical_dictionary.py",
+                "cbio_curation_assistant/cli/commands/curation_report.py",
+                "cbio_curation_assistant/cli/commands/genome_nexus.py",
+                "cbio_curation_assistant/cli/commands/oncotree_search.py",
+                "cbio_curation_assistant/cli/commands/study_download.py",
+                "cbio_curation_assistant/cli/commands/validate_study.py",
+                "cbio_curation_assistant/cli/commands/workspace.py",
+                "cbio_curation_assistant/cli/renderers/clinical_dictionary.py",
+                "cbio_curation_assistant/cli/renderers/oncotree.py",
                 "cbio_curation_assistant/cbioportal/classification.py",
                 "cbio_curation_assistant/cbioportal/specification_sources.py",
                 "cbio_curation_assistant/cbioportal/specs.py",
-                "cbio_curation_assistant/curation_report_cli.py",
-                "cbio_curation_assistant/genome_nexus_cli.py",
                 "cbio_curation_assistant/integrations/genome_nexus.py",
                 "cbio_curation_assistant/integrations/pmc/__init__.py",
                 "cbio_curation_assistant/integrations/pmc/archives.py",
@@ -88,7 +99,6 @@ class InstalledWheelSmokeTest(unittest.TestCase):
                 "cbio_curation_assistant/reports/curation.py",
                 "cbio_curation_assistant/reports/models.py",
                 "cbio_curation_assistant/reports/pdf.py",
-                "cbio_curation_assistant/study_download_cli.py",
                 "cbio_curation_assistant/supplements/formats.py",
                 "cbio_curation_assistant/supplements/readers.py",
                 "cbio_curation_assistant/workflows/study_download.py",
@@ -100,16 +110,23 @@ class InstalledWheelSmokeTest(unittest.TestCase):
                     self.assertIn(module_path, names)
             for obsolete_module_path in (
                 "cbio_curation_assistant/cbioportal_spec.py",
+                "cbio_curation_assistant/cli.py",
                 "cbio_curation_assistant/cli_shared.py",
+                "cbio_curation_assistant/clinical_dictionary_cli.py",
                 "cbio_curation_assistant/config.py",
+                "cbio_curation_assistant/curation_report_cli.py",
+                "cbio_curation_assistant/genome_nexus_cli.py",
                 "cbio_curation_assistant/hermes_llm.py",
                 "cbio_curation_assistant/llm_client.py",
                 "cbio_curation_assistant/metadata_merge.py",
+                "cbio_curation_assistant/oncotree_cli.py",
                 "cbio_curation_assistant/pdf_metadata_regex.py",
                 "cbio_curation_assistant/pmc_supplement_fetcher.py",
                 "cbio_curation_assistant/spec_fetcher.py",
                 "cbio_curation_assistant/spec_match.py",
+                "cbio_curation_assistant/study_download_cli.py",
                 "cbio_curation_assistant/xml_metadata.py",
+                "cbio_curation_assistant/command_result.py",
             ):
                 with self.subTest(obsolete_module_path=obsolete_module_path):
                     self.assertNotIn(obsolete_module_path, names)
