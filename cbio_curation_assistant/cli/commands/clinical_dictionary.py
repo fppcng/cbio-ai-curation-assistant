@@ -13,12 +13,20 @@ from cbio_curation_assistant.cbioportal.clinical_dictionary import (
     load_clinical_dictionary,
     load_default_clinical_dictionary,
 )
-from cbio_curation_assistant.cbioportal.clinical_mapping import (
-    ClinicalMappingQuery,
-    ClinicalMappingReport,
-    build_clinical_mapping_report,
-    parse_clinical_mapping_queries,
+from cbio_curation_assistant.cbioportal.clinical_mapping.clinical_files import (
     read_clinical_header,
+)
+from cbio_curation_assistant.cbioportal.clinical_mapping.models import (
+    ClinicalMappingReport,
+)
+from cbio_curation_assistant.cbioportal.clinical_mapping.queries import (
+    ClinicalMappingQuery,
+    parse_clinical_mapping_queries,
+)
+from cbio_curation_assistant.cbioportal.clinical_mapping.report_builder import (
+    build_clinical_mapping_report,
+)
+from cbio_curation_assistant.cbioportal.clinical_mapping.validation import (
     validate_clinical_mapping_report,
 )
 from cbio_curation_assistant.cli.json_io import load_json_object, write_json_object

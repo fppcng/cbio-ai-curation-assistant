@@ -10,7 +10,9 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from cbio_curation_assistant.workspace import ENV_VAR_NAME, StudyWorkspace
+from cbio_curation_assistant.workspace.configuration import ENV_VAR_NAME
+from cbio_curation_assistant.workspace.layout import StudyWorkspace
+from cbio_curation_assistant.workspace.lifecycle import initialize_workspace
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -73,6 +75,13 @@ class InstalledWheelSmokeTest(unittest.TestCase):
                 "cbio_curation_assistant/cli/renderers/clinical_dictionary.py",
                 "cbio_curation_assistant/cli/renderers/oncotree.py",
                 "cbio_curation_assistant/cbioportal/classification.py",
+                "cbio_curation_assistant/cbioportal/clinical_mapping/__init__.py",
+                "cbio_curation_assistant/cbioportal/clinical_mapping/clinical_files.py",
+                "cbio_curation_assistant/cbioportal/clinical_mapping/models.py",
+                "cbio_curation_assistant/cbioportal/clinical_mapping/parsing.py",
+                "cbio_curation_assistant/cbioportal/clinical_mapping/queries.py",
+                "cbio_curation_assistant/cbioportal/clinical_mapping/report_builder.py",
+                "cbio_curation_assistant/cbioportal/clinical_mapping/validation.py",
                 "cbio_curation_assistant/cbioportal/specification_sources.py",
                 "cbio_curation_assistant/cbioportal/specs.py",
                 "cbio_curation_assistant/integrations/genome_nexus.py",
@@ -98,14 +107,38 @@ class InstalledWheelSmokeTest(unittest.TestCase):
                 "cbio_curation_assistant/reports/__init__.py",
                 "cbio_curation_assistant/reports/curation.py",
                 "cbio_curation_assistant/reports/models.py",
-                "cbio_curation_assistant/reports/pdf.py",
+                "cbio_curation_assistant/reports/pdf/__init__.py",
+                "cbio_curation_assistant/reports/pdf/document.py",
+                "cbio_curation_assistant/reports/pdf/layout.py",
+                "cbio_curation_assistant/reports/pdf/output.py",
+                "cbio_curation_assistant/reports/pdf/overview.py",
+                "cbio_curation_assistant/reports/pdf/study_metadata.py",
+                "cbio_curation_assistant/reports/pdf/supplementary.py",
                 "cbio_curation_assistant/reports/presentation.py",
                 "cbio_curation_assistant/supplements/formats.py",
-                "cbio_curation_assistant/supplements/readers.py",
+                "cbio_curation_assistant/supplements/readers/__init__.py",
+                "cbio_curation_assistant/supplements/readers/contracts.py",
+                "cbio_curation_assistant/supplements/readers/dependencies.py",
+                "cbio_curation_assistant/supplements/readers/discovery.py",
+                "cbio_curation_assistant/supplements/readers/dispatch.py",
+                "cbio_curation_assistant/supplements/readers/pdf.py",
+                "cbio_curation_assistant/supplements/readers/tabular.py",
+                "cbio_curation_assistant/supplements/readers/word.py",
                 "cbio_curation_assistant/workflows/study_download.py",
-                "cbio_curation_assistant/workflows/curation_report.py",
+                "cbio_curation_assistant/workflows/curation_report/__init__.py",
+                "cbio_curation_assistant/workflows/curation_report/artifacts.py",
+                "cbio_curation_assistant/workflows/curation_report/discovery.py",
+                "cbio_curation_assistant/workflows/curation_report/metadata.py",
+                "cbio_curation_assistant/workflows/curation_report/models.py",
+                "cbio_curation_assistant/workflows/curation_report/runner.py",
                 "cbio_curation_assistant/workflows/mutation_annotation.py",
                 "cbio_curation_assistant/cbioportal/mutations.py",
+                "cbio_curation_assistant/workspace/__init__.py",
+                "cbio_curation_assistant/workspace/configuration.py",
+                "cbio_curation_assistant/workspace/discovery.py",
+                "cbio_curation_assistant/workspace/layout.py",
+                "cbio_curation_assistant/workspace/lifecycle.py",
+                "cbio_curation_assistant/workspace/manifest.py",
             ):
                 with self.subTest(module_path=module_path):
                     self.assertIn(module_path, names)
@@ -128,6 +161,11 @@ class InstalledWheelSmokeTest(unittest.TestCase):
                 "cbio_curation_assistant/study_download_cli.py",
                 "cbio_curation_assistant/xml_metadata.py",
                 "cbio_curation_assistant/command_result.py",
+                "cbio_curation_assistant/cbioportal/clinical_mapping.py",
+                "cbio_curation_assistant/reports/pdf.py",
+                "cbio_curation_assistant/supplements/readers.py",
+                "cbio_curation_assistant/workflows/curation_report.py",
+                "cbio_curation_assistant/workspace.py",
             ):
                 with self.subTest(obsolete_module_path=obsolete_module_path):
                     self.assertNotIn(obsolete_module_path, names)
@@ -187,6 +225,36 @@ class InstalledWheelSmokeTest(unittest.TestCase):
                 timeout=120,
             )
             self.assertEqual(install.returncode, 0, install.stderr or install.stdout)
+
+            no_facades = subprocess.run(
+                [
+                    str(python),
+                    "-c",
+                    (
+                        "import cbio_curation_assistant.workspace as workspace; "
+                        "import cbio_curation_assistant.cbioportal.clinical_mapping "
+                        "as clinical_mapping; "
+                        "import cbio_curation_assistant.workflows.curation_report "
+                        "as curation_report; "
+                        "import cbio_curation_assistant.supplements.readers as readers; "
+                        "import cbio_curation_assistant.reports.pdf as report_pdf; "
+                        "assert not hasattr(workspace, 'StudyWorkspace'); "
+                        "assert not hasattr(clinical_mapping, 'ClinicalMappingReport'); "
+                        "assert not hasattr(curation_report, 'run_curation_report'); "
+                        "assert not hasattr(readers, 'read_supplementary_file'); "
+                        "assert not hasattr(report_pdf, 'build_curation_report_pdf')"
+                    ),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            self.assertEqual(
+                no_facades.returncode,
+                0,
+                no_facades.stderr or no_facades.stdout,
+            )
 
             command = environment_dir / "bin" / "cbio-curation"
             help_environment = os.environ.copy()
@@ -276,7 +344,7 @@ class InstalledWheelSmokeTest(unittest.TestCase):
                 "PMC123",
                 assistant_home=workspace_home,
             )
-            workspace.initialize()
+            initialize_workspace(workspace)
             environment = os.environ.copy()
             environment[ENV_VAR_NAME] = str(workspace_home)
             completed = subprocess.run(

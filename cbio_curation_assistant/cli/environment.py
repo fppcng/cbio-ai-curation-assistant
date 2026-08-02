@@ -5,7 +5,10 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from cbio_curation_assistant.workspace import ENV_VAR_NAME, resolve_assistant_home
+from cbio_curation_assistant.workspace.configuration import (
+    ENV_VAR_NAME,
+    resolve_assistant_home,
+)
 
 
 def assistant_home() -> Path:

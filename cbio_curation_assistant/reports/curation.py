@@ -24,7 +24,9 @@ from cbio_curation_assistant.reports.presentation import (
     format_label,
 )
 from cbio_curation_assistant.supplements.models import SupplementaryClassification
-from cbio_curation_assistant.supplements.readers import read_supplementary_file
+from cbio_curation_assistant.supplements.readers.dispatch import (
+    read_supplementary_file,
+)
 
 
 CURABILITY = {

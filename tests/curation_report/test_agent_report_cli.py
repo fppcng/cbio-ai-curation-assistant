@@ -14,8 +14,11 @@ from cbio_curation_assistant.cli.commands import (
     curation_report as curation_report_command,
 )
 from cbio_curation_assistant.supplements.models import SupplementaryClassification
-from cbio_curation_assistant.workspace import ENV_VAR_NAME, StudyWorkspace
-from cbio_curation_assistant.workflows import curation_report
+from cbio_curation_assistant.workspace.configuration import ENV_VAR_NAME
+from cbio_curation_assistant.workspace.layout import StudyWorkspace
+from cbio_curation_assistant.workspace.lifecycle import initialize_workspace
+import cbio_curation_assistant.workflows.curation_report.metadata as metadata
+import cbio_curation_assistant.workflows.curation_report.runner as curation_report
 
 
 class AgentReportCliTest(unittest.TestCase):
@@ -23,7 +26,7 @@ class AgentReportCliTest(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="agent_report_cli_") as tmp_dir:
             home = Path(tmp_dir)
             workspace = StudyWorkspace.from_study_id("pmc1234567", assistant_home=home)
-            workspace.initialize()
+            initialize_workspace(workspace)
             workspace.article_xml_path.write_text("<article />", encoding="utf-8")
             supplementary_path = workspace.supplementary_dir / "table.xlsx"
             supplementary_path.write_bytes(b"placeholder")
@@ -42,7 +45,7 @@ class AgentReportCliTest(unittest.TestCase):
                     return_value=None,
                 ):
                     with mock.patch.object(
-                        curation_report,
+                        metadata,
                         "extract_xml_metadata_with_llm",
                         return_value={"study_id_suggestion": workspace.study_id},
                     ):

@@ -10,11 +10,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from cbio_curation_assistant import cli
-from cbio_curation_assistant.workspace import (
-    ENV_VAR_NAME,
-    StudyWorkspace,
-    get_study_workspace,
-)
+from cbio_curation_assistant.workspace.configuration import ENV_VAR_NAME
+from cbio_curation_assistant.workspace.layout import StudyWorkspace
+from cbio_curation_assistant.workspace.lifecycle import initialize_workspace
 
 
 def invoke_cli(argv: list[str], env: dict[str, str]) -> tuple[int, str, str]:
@@ -30,9 +28,11 @@ def invoke_cli(argv: list[str], env: dict[str, str]) -> tuple[int, str, str]:
 
 
 class WorkspaceDescribeCliTest(unittest.TestCase):
-    def create_workspace(self, home: Path, study_id: str = "PMC6753053") -> StudyWorkspace:
+    def create_workspace(
+        self, home: Path, study_id: str = "PMC6753053"
+    ) -> StudyWorkspace:
         workspace = StudyWorkspace.from_study_id(study_id, assistant_home=home)
-        workspace.initialize()
+        initialize_workspace(workspace)
         return workspace
 
     def describe(self, home: Path, study_id: str) -> tuple[int, str, str]:
@@ -51,7 +51,9 @@ class WorkspaceDescribeCliTest(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertEqual(stderr, "")
             payload = json.loads(stdout)
-            self.assertEqual(stdout, json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
+            self.assertEqual(
+                stdout, json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+            )
             self.assertEqual(payload["schema_version"], 1)
             self.assertEqual(payload["command"], "workspace.describe")
             self.assertEqual(payload["status"], "success")
@@ -71,15 +73,37 @@ class WorkspaceDescribeCliTest(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertEqual(stderr, "")
             self.assertEqual(result["workspace"]["root"], str(workspace.root.resolve()))
-            self.assertEqual(result["workspace"]["source"], str(workspace.source_dir.resolve()))
-            self.assertEqual(result["workspace"]["article"], str(workspace.article_dir.resolve()))
-            self.assertEqual(result["workspace"]["supplementary"], str(workspace.supplementary_dir.resolve()))
-            self.assertEqual(result["workspace"]["curated"], str(workspace.curated_dir.resolve()))
-            self.assertEqual(result["workspace"]["reports"], str(workspace.reports_dir.resolve()))
-            self.assertEqual(result["manifests"]["study"], str(workspace.manifest_path.resolve()))
-            self.assertEqual(result["manifests"]["download"], str(workspace.download_manifest_path.resolve()))
-            self.assertEqual(result["artifacts"]["article_xml"], str(workspace.article_xml_path.resolve()))
-            self.assertEqual(result["artifacts"]["article_pdf"], str(workspace.article_pdf_path.resolve()))
+            self.assertEqual(
+                result["workspace"]["source"], str(workspace.source_dir.resolve())
+            )
+            self.assertEqual(
+                result["workspace"]["article"], str(workspace.article_dir.resolve())
+            )
+            self.assertEqual(
+                result["workspace"]["supplementary"],
+                str(workspace.supplementary_dir.resolve()),
+            )
+            self.assertEqual(
+                result["workspace"]["curated"], str(workspace.curated_dir.resolve())
+            )
+            self.assertEqual(
+                result["workspace"]["reports"], str(workspace.reports_dir.resolve())
+            )
+            self.assertEqual(
+                result["manifests"]["study"], str(workspace.manifest_path.resolve())
+            )
+            self.assertEqual(
+                result["manifests"]["download"],
+                str(workspace.download_manifest_path.resolve()),
+            )
+            self.assertEqual(
+                result["artifacts"]["article_xml"],
+                str(workspace.article_xml_path.resolve()),
+            )
+            self.assertEqual(
+                result["artifacts"]["article_pdf"],
+                str(workspace.article_pdf_path.resolve()),
+            )
             self.assertEqual(
                 result["artifacts"]["curation_report_agent"],
                 str(workspace.curation_report_agent_path.resolve()),
@@ -128,7 +152,9 @@ class WorkspaceDescribeCliTest(unittest.TestCase):
         payload = json.loads(stdout)
         self.assertIn(ENV_VAR_NAME, payload["error"]["message"])
 
-    def test_missing_study_manifest_returns_nonzero_and_does_not_create_workspace(self) -> None:
+    def test_missing_study_manifest_returns_nonzero_and_does_not_create_workspace(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory(prefix="workspace_describe_") as tmp_dir:
             home = Path(tmp_dir)
             study_id = "pmc6753053"
@@ -154,8 +180,12 @@ class WorkspaceDescribeCliTest(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertNotEqual(stdout, "")
             self.assertEqual(stderr, "")
-            self.assertEqual(workspace.manifest_path.read_text(encoding="utf-8"), before_content)
-            self.assertEqual(workspace.manifest_path.stat().st_mtime_ns, before_mtime_ns)
+            self.assertEqual(
+                workspace.manifest_path.read_text(encoding="utf-8"), before_content
+            )
+            self.assertEqual(
+                workspace.manifest_path.stat().st_mtime_ns, before_mtime_ns
+            )
 
     def test_noncanonical_managed_paths_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory(prefix="workspace_describe_") as tmp_dir:
@@ -187,9 +217,11 @@ class WorkspaceDescribeCliTest(unittest.TestCase):
             )
             before = workspace.manifest_path.read_text(encoding="utf-8")
 
-            get_study_workspace(workspace.study_id, assistant_home=home, create=True)
+            initialize_workspace(workspace)
 
-            self.assertEqual(workspace.manifest_path.read_text(encoding="utf-8"), before)
+            self.assertEqual(
+                workspace.manifest_path.read_text(encoding="utf-8"), before
+            )
 
 
 if __name__ == "__main__":

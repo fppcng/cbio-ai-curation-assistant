@@ -12,7 +12,7 @@ from cbio_curation_assistant.cli.result import (
     render_command_result,
 )
 from cbio_curation_assistant.llm import resolve_optional_llm_config
-from cbio_curation_assistant.workflows.curation_report import (
+from cbio_curation_assistant.workflows.curation_report.runner import (
     run_curation_report_for_study,
 )
 

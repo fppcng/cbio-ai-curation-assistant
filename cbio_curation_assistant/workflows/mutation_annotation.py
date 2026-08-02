@@ -16,7 +16,7 @@ from cbio_curation_assistant.cbioportal.mutations import (
     inspect_maf,
 )
 from cbio_curation_assistant.integrations import genome_nexus
-from cbio_curation_assistant.workspace import StudyWorkspace
+from cbio_curation_assistant.workspace.lifecycle import load_workspace
 
 
 GenomeBuild: TypeAlias = Literal["GRCh37", "GRCh38"]
@@ -170,7 +170,7 @@ def resolve_workspace(
     assistant_home: str | Path | None = None,
 ) -> Path:
     """Resolve the canonical curated directory for an initialized study."""
-    return StudyWorkspace.load(study_id, assistant_home=assistant_home).curated_dir
+    return load_workspace(study_id, assistant_home=assistant_home).curated_dir
 
 
 def check_existing_outputs(paths: Iterable[Path], *, force: bool) -> None:
@@ -316,9 +316,7 @@ def run_genome_nexus_annotation(
         _write_execution_log(attempt_paths["log"], execution)
 
         if execution.timed_out:
-            raise PipelineError(
-                f"Genome Nexus timed out after {timeout} seconds."
-            )
+            raise PipelineError(f"Genome Nexus timed out after {timeout} seconds.")
         if execution.returncode != 0:
             raise PipelineError(
                 "Genome Nexus container failed with exit code "

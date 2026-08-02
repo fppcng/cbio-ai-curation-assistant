@@ -7,7 +7,7 @@ from cbio_curation_assistant.cli.result import command_result
 from cbio_curation_assistant.integrations.pmc import ResolvedStudyIdentifier
 from cbio_curation_assistant.publications.models import PublicationMetadata
 from cbio_curation_assistant.supplements.models import SupplementaryClassification
-from cbio_curation_assistant.workflows.curation_report import (
+from cbio_curation_assistant.workflows.curation_report.models import (
     CurationReportInputs,
     PaperSource,
 )

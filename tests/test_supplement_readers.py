@@ -11,9 +11,11 @@ from docx import Document
 from reportlab.pdfgen import canvas
 
 from cbio_curation_assistant.cbioportal.classification import ClassificationResult
-from cbio_curation_assistant.reports import curation as report_curation
-from cbio_curation_assistant.supplements import readers
-from cbio_curation_assistant.supplements.readers import (
+import cbio_curation_assistant.reports.curation as report_curation
+import cbio_curation_assistant.supplements.readers.dependencies as reader_dependencies
+import cbio_curation_assistant.supplements.readers.tabular as tabular_reader
+import cbio_curation_assistant.supplements.readers.word as word_reader
+from cbio_curation_assistant.supplements.readers.contracts import (
     EmptySupplementaryFileError,
     MissingExternalReaderError,
     MissingReaderDependencyError,
@@ -21,9 +23,15 @@ from cbio_curation_assistant.supplements.readers import (
     SupplementaryReadResult,
     SupplementaryReaderPreflightError,
     UnsupportedSupplementaryFormatError,
-    discover_supplementary_files,
-    read_supplementary_file,
+)
+from cbio_curation_assistant.supplements.readers.dependencies import (
     require_supplementary_reader_dependencies,
+)
+from cbio_curation_assistant.supplements.readers.discovery import (
+    discover_supplementary_files,
+)
+from cbio_curation_assistant.supplements.readers.dispatch import (
+    read_supplementary_file,
 )
 
 
@@ -69,9 +77,7 @@ class SupplementReaderTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp_dir:
             path = Path(tmp_dir) / "tables.xlsx"
             with pd.ExcelWriter(path) as writer:
-                pd.DataFrame(
-                    [[None, None], ["sample", "value"], ["S1", 1]]
-                ).to_excel(
+                pd.DataFrame([[None, None], ["sample", "value"], ["S1", 1]]).to_excel(
                     writer,
                     sheet_name="Data",
                     index=False,
@@ -109,7 +115,7 @@ class SupplementReaderTest(unittest.TestCase):
             path = Path(tmp_dir) / "partial.xlsx"
             path.write_bytes(b"not-empty")
             with patch.object(
-                readers.pd,
+                tabular_reader.pd,
                 "ExcelFile",
                 return_value=PartiallyReadableWorkbook(),
             ):
@@ -154,7 +160,7 @@ class SupplementReaderTest(unittest.TestCase):
             path.write_bytes(b"legacy document")
 
             with (
-                patch.object(readers.shutil, "which", return_value=None),
+                patch.object(word_reader.shutil, "which", return_value=None),
                 self.assertRaisesRegex(
                     MissingExternalReaderError,
                     "libreoffice",
@@ -191,7 +197,7 @@ class SupplementReaderTest(unittest.TestCase):
 
             with (
                 patch.object(
-                    readers,
+                    reader_dependencies,
                     "import_module",
                     side_effect=import_without_pdfplumber,
                 ),
@@ -256,8 +262,12 @@ class SupplementReaderTest(unittest.TestCase):
             raise ModuleNotFoundError(f"{name} unavailable")
 
         with (
-            patch.object(readers, "import_module", side_effect=missing_import),
-            patch.object(readers.shutil, "which", return_value=None),
+            patch.object(
+                reader_dependencies,
+                "import_module",
+                side_effect=missing_import,
+            ),
+            patch.object(reader_dependencies.shutil, "which", return_value=None),
             self.assertRaises(SupplementaryReaderPreflightError) as raised,
         ):
             require_supplementary_reader_dependencies(

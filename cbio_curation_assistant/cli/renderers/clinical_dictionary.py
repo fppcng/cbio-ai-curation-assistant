@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from cbio_curation_assistant.cbioportal.clinical_mapping import (
+from cbio_curation_assistant.cbioportal.clinical_mapping.models import (
     ClinicalMappingReport,
+)
+from cbio_curation_assistant.cbioportal.clinical_mapping.validation import (
     ClinicalMappingValidationResult,
 )
 

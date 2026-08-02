@@ -6,12 +6,14 @@ from dataclasses import replace
 from pathlib import Path
 
 from cbio_curation_assistant.publications.models import PublicationMetadata
-from cbio_curation_assistant.reports import (
+from cbio_curation_assistant.reports.curation import build_curation_report_json
+from cbio_curation_assistant.reports.models import (
     CurationSummary,
     ReportBreakdownRow,
+)
+from cbio_curation_assistant.reports.pdf.document import build_curation_report_pdf
+from cbio_curation_assistant.reports.pdf.output import (
     build_curation_report_filename,
-    build_curation_report_json,
-    build_curation_report_pdf,
     save_curation_report_pdf,
 )
 from cbio_curation_assistant.publications import extract_xml_metadata_with_llm

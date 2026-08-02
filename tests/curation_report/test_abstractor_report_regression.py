@@ -5,8 +5,18 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from cbio_curation_assistant.workspace import StudyWorkspace
-from cbio_curation_assistant.workflows import curation_report
+from cbio_curation_assistant.workspace.layout import StudyWorkspace
+from cbio_curation_assistant.workspace.lifecycle import initialize_workspace
+from cbio_curation_assistant.workflows.curation_report.discovery import (
+    discover_curation_report_inputs,
+)
+from cbio_curation_assistant.workflows.curation_report.models import (
+    CurationReportInputs,
+    PaperSource,
+)
+from cbio_curation_assistant.workflows.curation_report.runner import (
+    run_curation_report,
+)
 from tests.curation_report.abstractor_report_regression_support import (
     NO_LLM_WARNING,
     SYNTHETIC_ARTICLE_PATH,
@@ -25,7 +35,7 @@ class AbstractorReportRegressionTest(unittest.TestCase):
                 "synthetic-publication",
                 assistant_home=root,
             )
-            workspace.initialize()
+            initialize_workspace(workspace)
             workspace.article_xml_path.write_bytes(SYNTHETIC_ARTICLE_PATH.read_bytes())
             supplement_path = workspace.supplementary_dir / "samples.csv"
             supplement_path.write_text(
@@ -35,9 +45,9 @@ class AbstractorReportRegressionTest(unittest.TestCase):
             output_json_path = workspace.reports_dir / "report.json"
             output_pdf_path = workspace.reports_dir / "report.pdf"
 
-            result = curation_report.run_curation_report(
-                curation_report.CurationReportInputs(
-                    paper_source=curation_report.PaperSource(
+            result = run_curation_report(
+                CurationReportInputs(
+                    paper_source=PaperSource(
                         kind="xml",
                         path=workspace.article_xml_path,
                     ),
@@ -70,7 +80,7 @@ class CurationReportInputDiscoveryTest(unittest.TestCase):
                 "pmc123",
                 assistant_home=Path(tmp_dir),
             )
-            workspace.initialize()
+            initialize_workspace(workspace)
             workspace.article_xml_path.write_text(
                 "<article />",
                 encoding="utf-8",
@@ -85,9 +95,7 @@ class CurationReportInputDiscoveryTest(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            inputs, warnings = curation_report.discover_curation_report_inputs(
-                workspace
-            )
+            inputs, warnings = discover_curation_report_inputs(workspace)
 
         self.assertEqual(inputs.paper_source.kind, "xml")
         self.assertEqual(inputs.paper_source.path, workspace.article_xml_path)
@@ -105,16 +113,14 @@ class CurationReportInputDiscoveryTest(unittest.TestCase):
                 "pmc123",
                 assistant_home=Path(tmp_dir),
             )
-            workspace.initialize()
+            initialize_workspace(workspace)
             workspace.article_pdf_path.write_bytes(b"%PDF-1.4\n")
             (workspace.supplementary_dir / "table.csv").write_text(
                 "SAMPLE_ID\nS1\n",
                 encoding="utf-8",
             )
 
-            inputs, warnings = curation_report.discover_curation_report_inputs(
-                workspace
-            )
+            inputs, warnings = discover_curation_report_inputs(workspace)
 
         self.assertEqual(inputs.paper_source.kind, "pdf")
         self.assertEqual(warnings, ())
@@ -125,13 +131,13 @@ class CurationReportInputDiscoveryTest(unittest.TestCase):
                 "pmc123",
                 assistant_home=Path(tmp_dir),
             )
-            workspace.initialize()
+            initialize_workspace(workspace)
 
             with self.assertRaisesRegex(
                 FileNotFoundError,
                 "No canonical article source",
             ):
-                curation_report.discover_curation_report_inputs(workspace)
+                discover_curation_report_inputs(workspace)
 
 
 if __name__ == "__main__":

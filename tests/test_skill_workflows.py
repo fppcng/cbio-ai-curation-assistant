@@ -25,18 +25,22 @@ from cbio_curation_assistant.integrations.pmc import (
     PMCRequestError,
 )
 from cbio_curation_assistant.supplements.models import SupplementaryClassification
-from cbio_curation_assistant.workspace import StudyWorkspace
-from cbio_curation_assistant.workflows import (
-    curation_report as curation_report_workflow,
+from cbio_curation_assistant.workspace.lifecycle import load_workspace
+import cbio_curation_assistant.workflows.curation_report.metadata as report_metadata
+import cbio_curation_assistant.workflows.curation_report.runner as curation_report_workflow
+from cbio_curation_assistant.workflows.curation_report.models import (
+    AgentReportData,
+    CurationReportInputs,
+    PaperSource,
 )
-from cbio_curation_assistant.workflows import (
-    mutation_annotation as mutation_annotation_workflow,
-)
-from cbio_curation_assistant.workflows import study_download as study_download_workflow
+import cbio_curation_assistant.workflows.mutation_annotation as mutation_annotation_workflow
+import cbio_curation_assistant.workflows.study_download as study_download_workflow
 
 
 class StudyDownloadWorkflowTest(unittest.TestCase):
-    def test_successful_download_initializes_workspace_and_persists_manifest(self) -> None:
+    def test_successful_download_initializes_workspace_and_persists_manifest(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             home = Path(tmp_dir)
 
@@ -86,7 +90,7 @@ class StudyDownloadWorkflowTest(unittest.TestCase):
                     assistant_home=home,
                 )
 
-            workspace = StudyWorkspace.load("pmc123", assistant_home=home)
+            workspace = load_workspace("pmc123", assistant_home=home)
             persisted = json.loads(
                 workspace.download_manifest_path.read_text(encoding="utf-8")
             )
@@ -202,7 +206,7 @@ class CurationReportWorkflowTest(unittest.TestCase):
 
             with (
                 patch.object(
-                    curation_report_workflow,
+                    report_metadata,
                     "extract_xml_metadata_with_llm",
                     return_value=metadata,
                 ),
@@ -223,8 +227,8 @@ class CurationReportWorkflowTest(unittest.TestCase):
                 ),
             ):
                 result = curation_report_workflow.run_curation_report(
-                    curation_report_workflow.CurationReportInputs(
-                        paper_source=curation_report_workflow.PaperSource(
+                    CurationReportInputs(
+                        paper_source=PaperSource(
                             kind="xml",
                             path=xml_path,
                         ),
@@ -237,7 +241,7 @@ class CurationReportWorkflowTest(unittest.TestCase):
             persisted = json.loads(output_json.read_text(encoding="utf-8"))
             self.assertIsInstance(
                 result.agent_report,
-                curation_report_workflow.AgentReportData,
+                AgentReportData,
             )
             self.assertIsNotNone(result.outputs.agent_report_json)
             self.assertFalse(result.outputs.agent_report_json.is_file())
@@ -381,7 +385,8 @@ class GenomeNexusWorkflowTest(unittest.TestCase):
         )
         attempt = mutation_annotation_workflow.GenomeNexusAttemptArtifacts(
             attempt_directory=root / "validation/attempts/attempt",
-            candidate_output_file=root / "validation/attempts/attempt/data_mutations.txt",
+            candidate_output_file=root
+            / "validation/attempts/attempt/data_mutations.txt",
         )
         partial_result = mutation_annotation_workflow.GenomeNexusResult(
             **{**common, "failed_annotations": 1, "successful_annotations": 0},
@@ -439,8 +444,12 @@ class GenomeNexusWorkflowTest(unittest.TestCase):
             attempt_dir = workspace / "attempt"
             input_path.write_text(self.maf_text(), encoding="utf-8")
 
-            def run_pipeline(*args: object, **kwargs: object) -> genome_nexus.GenomeNexusExecution:
-                (attempt_dir / mutation_annotation_workflow.OUTPUT_MAF_FILENAME).write_text(
+            def run_pipeline(
+                *args: object, **kwargs: object
+            ) -> genome_nexus.GenomeNexusExecution:
+                (
+                    attempt_dir / mutation_annotation_workflow.OUTPUT_MAF_FILENAME
+                ).write_text(
                     self.maf_text(include_status=True),
                     encoding="utf-8",
                 )
@@ -467,7 +476,9 @@ class GenomeNexusWorkflowTest(unittest.TestCase):
                     "create_attempt_directory",
                     side_effect=create_attempt,
                 ),
-                patch.object(genome_nexus, "run_annotation_container", side_effect=run_pipeline),
+                patch.object(
+                    genome_nexus, "run_annotation_container", side_effect=run_pipeline
+                ),
             ):
                 run = mutation_annotation_workflow.run_genome_nexus_annotation(
                     study_id="pmc123",
@@ -482,7 +493,9 @@ class GenomeNexusWorkflowTest(unittest.TestCase):
             attempt_exists = attempt_dir.exists()
 
         self.assertEqual(run.status, "success")
-        self.assertIsInstance(run.result, mutation_annotation_workflow.GenomeNexusResult)
+        self.assertIsInstance(
+            run.result, mutation_annotation_workflow.GenomeNexusResult
+        )
         assert isinstance(run.result, mutation_annotation_workflow.GenomeNexusResult)
         self.assertEqual(run.result.input_records, 1)
         self.assertEqual(run.result.successful_annotations, 1)
@@ -496,8 +509,12 @@ class GenomeNexusWorkflowTest(unittest.TestCase):
             attempt_dir = workspace / "attempt"
             input_path.write_text(self.maf_text(), encoding="utf-8")
 
-            def run_pipeline(*args: object, **kwargs: object) -> genome_nexus.GenomeNexusExecution:
-                (attempt_dir / mutation_annotation_workflow.OUTPUT_MAF_FILENAME).write_text(
+            def run_pipeline(
+                *args: object, **kwargs: object
+            ) -> genome_nexus.GenomeNexusExecution:
+                (
+                    attempt_dir / mutation_annotation_workflow.OUTPUT_MAF_FILENAME
+                ).write_text(
                     self.maf_text(include_status=True)
                     + "17\t2\t2\tG\tC\tS2\tSUCCESS\n",
                     encoding="utf-8",
@@ -525,7 +542,9 @@ class GenomeNexusWorkflowTest(unittest.TestCase):
                     "create_attempt_directory",
                     side_effect=create_attempt,
                 ),
-                patch.object(genome_nexus, "run_annotation_container", side_effect=run_pipeline),
+                patch.object(
+                    genome_nexus, "run_annotation_container", side_effect=run_pipeline
+                ),
             ):
                 run = mutation_annotation_workflow.run_genome_nexus_annotation(
                     study_id="pmc123",
@@ -584,7 +603,9 @@ class GenomeNexusWorkflowTest(unittest.TestCase):
 
             self.assertEqual(run.status, "error")
             self.assertEqual(str(run.error), "docker unavailable")
-            self.assertEqual(output_path.read_text(encoding="utf-8"), "previous output\n")
+            self.assertEqual(
+                output_path.read_text(encoding="utf-8"), "previous output\n"
+            )
             create_attempt.assert_not_called()
 
     def test_partial_force_run_preserves_existing_canonical_output(self) -> None:
@@ -600,8 +621,12 @@ class GenomeNexusWorkflowTest(unittest.TestCase):
                 attempt_dir.mkdir()
                 return attempt_dir
 
-            def run_pipeline(*args: object, **kwargs: object) -> genome_nexus.GenomeNexusExecution:
-                (attempt_dir / mutation_annotation_workflow.OUTPUT_MAF_FILENAME).write_text(
+            def run_pipeline(
+                *args: object, **kwargs: object
+            ) -> genome_nexus.GenomeNexusExecution:
+                (
+                    attempt_dir / mutation_annotation_workflow.OUTPUT_MAF_FILENAME
+                ).write_text(
                     self.maf_text(include_status=True, status="FAILED"),
                     encoding="utf-8",
                 )
@@ -624,7 +649,9 @@ class GenomeNexusWorkflowTest(unittest.TestCase):
                     "create_attempt_directory",
                     side_effect=create_attempt,
                 ),
-                patch.object(genome_nexus, "run_annotation_container", side_effect=run_pipeline),
+                patch.object(
+                    genome_nexus, "run_annotation_container", side_effect=run_pipeline
+                ),
             ):
                 run = mutation_annotation_workflow.run_genome_nexus_annotation(
                     study_id="pmc123",
@@ -635,11 +662,17 @@ class GenomeNexusWorkflowTest(unittest.TestCase):
                 )
 
             self.assertEqual(run.status, "partial_success")
-            self.assertEqual(output_path.read_text(encoding="utf-8"), "previous output\n")
-            assert isinstance(run.result, mutation_annotation_workflow.GenomeNexusResult)
+            self.assertEqual(
+                output_path.read_text(encoding="utf-8"), "previous output\n"
+            )
+            assert isinstance(
+                run.result, mutation_annotation_workflow.GenomeNexusResult
+            )
             self.assertTrue(run.result.canonical_outputs_preserved)
             self.assertTrue(
-                (attempt_dir / mutation_annotation_workflow.OUTPUT_MAF_FILENAME).is_file()
+                (
+                    attempt_dir / mutation_annotation_workflow.OUTPUT_MAF_FILENAME
+                ).is_file()
             )
 
     def test_failed_promotion_rolls_back_all_canonical_outputs(self) -> None:

@@ -7,7 +7,8 @@ from collections.abc import Sequence
 
 from cbio_curation_assistant.cli.environment import assistant_home
 from cbio_curation_assistant.cli.result import CommandResult, command_result
-from cbio_curation_assistant.workspace import get_study_workspace
+from cbio_curation_assistant.workspace.discovery import build_workspace_discovery
+from cbio_curation_assistant.workspace.lifecycle import load_workspace
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -37,15 +38,14 @@ def run(argv: Sequence[str]) -> CommandResult[object]:
     args = _build_parser().parse_args(argv)
     if args.workspace_command != "describe":
         raise ValueError(f"Unsupported workspace command: {args.workspace_command}")
-    workspace = get_study_workspace(
+    workspace = load_workspace(
         args.study_id,
         assistant_home=assistant_home(),
-        require_manifest=True,
     )
     return command_result(
         "workspace.describe",
         status="success",
-        result=workspace.discovery_payload(),
+        result=build_workspace_discovery(workspace),
     )
 
 

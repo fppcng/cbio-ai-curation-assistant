@@ -10,7 +10,7 @@ import sys
 from collections.abc import Sequence
 
 from cbio_curation_assistant.cli.environment import assistant_home
-from cbio_curation_assistant.workspace import StudyWorkspace
+from cbio_curation_assistant.workspace.layout import StudyWorkspace
 
 
 def _build_parser() -> argparse.ArgumentParser:

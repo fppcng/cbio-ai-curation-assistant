@@ -5,11 +5,21 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from cbio_curation_assistant.workspace import (
+from cbio_curation_assistant.workspace.configuration import (
     InvalidStudyIdError,
-    StudyWorkspace,
     WorkspaceConfigurationError,
     normalize_study_id,
+)
+from cbio_curation_assistant.workspace.discovery import build_workspace_discovery
+from cbio_curation_assistant.workspace.layout import StudyWorkspace
+from cbio_curation_assistant.workspace.lifecycle import (
+    create_workspace_directories,
+    initialize_workspace,
+    load_workspace_from_manifest,
+)
+from cbio_curation_assistant.workspace.manifest import (
+    build_manifest_payload,
+    load_workspace_manifest,
 )
 
 
@@ -24,7 +34,7 @@ class WorkspaceModelTest(unittest.TestCase):
     def test_create_builds_the_canonical_directory_layout(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             workspace = StudyWorkspace.from_study_id("PMC1", assistant_home=tmp_dir)
-            workspace.create()
+            create_workspace_directories(workspace)
 
             for directory in workspace.directories():
                 self.assertTrue(directory.is_dir(), directory)
@@ -32,46 +42,49 @@ class WorkspaceModelTest(unittest.TestCase):
     def test_manifest_round_trip_and_from_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             workspace = StudyWorkspace.from_study_id("PMC1", assistant_home=tmp_dir)
-            manifest_path = workspace.initialize()
-            loaded = StudyWorkspace.from_manifest(manifest_path)
+            manifest_path = initialize_workspace(workspace)
+            loaded = load_workspace_from_manifest(manifest_path)
 
             self.assertEqual(loaded, workspace)
-            self.assertEqual(loaded.load_manifest(), workspace.manifest_payload())
+            self.assertEqual(
+                load_workspace_manifest(loaded),
+                build_manifest_payload(workspace),
+            )
 
     def test_manifest_must_be_valid_json_object(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             workspace = StudyWorkspace.from_study_id("PMC1", assistant_home=tmp_dir)
-            workspace.create()
+            create_workspace_directories(workspace)
 
             workspace.manifest_path.write_text("{", encoding="utf-8")
             with self.assertRaisesRegex(WorkspaceConfigurationError, "not valid JSON"):
-                workspace.load_manifest()
+                load_workspace_manifest(workspace)
 
             workspace.manifest_path.write_text("[]", encoding="utf-8")
             with self.assertRaisesRegex(WorkspaceConfigurationError, "JSON object"):
-                workspace.load_manifest()
+                load_workspace_manifest(workspace)
 
     def test_manifest_rejects_version_and_study_id_mismatches(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             workspace = StudyWorkspace.from_study_id("PMC1", assistant_home=tmp_dir)
-            workspace.initialize()
-            payload = workspace.manifest_payload()
+            initialize_workspace(workspace)
+            payload = build_manifest_payload(workspace)
 
             payload["manifest_version"] = 999
             workspace.manifest_path.write_text(json.dumps(payload), encoding="utf-8")
             with self.assertRaisesRegex(WorkspaceConfigurationError, "Unsupported"):
-                workspace.load_manifest()
+                load_workspace_manifest(workspace)
 
-            payload = workspace.manifest_payload()
+            payload = build_manifest_payload(workspace)
             payload["study_id"] = "pmc2"
             workspace.manifest_path.write_text(json.dumps(payload), encoding="utf-8")
             with self.assertRaisesRegex(WorkspaceConfigurationError, "mismatch"):
-                workspace.load_manifest()
+                load_workspace_manifest(workspace)
 
     def test_paths_cannot_escape_the_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             workspace = StudyWorkspace.from_study_id("PMC1", assistant_home=tmp_dir)
-            workspace.create()
+            create_workspace_directories(workspace)
             outside = Path(tmp_dir) / "outside.txt"
 
             self.assertFalse(workspace.contains(outside))
@@ -83,10 +96,10 @@ class WorkspaceModelTest(unittest.TestCase):
     def test_discovery_payload_reports_current_artifact_availability(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             workspace = StudyWorkspace.from_study_id("PMC1", assistant_home=tmp_dir)
-            workspace.initialize()
+            initialize_workspace(workspace)
             workspace.article_pdf_path.write_bytes(b"%PDF-")
 
-            payload = workspace.discovery_payload()
+            payload = build_workspace_discovery(workspace)
 
             self.assertNotIn("schema_version", payload)
             self.assertNotIn("status", payload)

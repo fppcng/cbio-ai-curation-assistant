@@ -7,11 +7,19 @@ from pathlib import Path
 from cbio_curation_assistant.cbioportal.clinical_dictionary import (
     ClinicalDictionaryAttribute,
 )
-from cbio_curation_assistant.cbioportal.clinical_mapping import (
-    ClinicalMappingReport,
-    build_clinical_mapping_report,
-    parse_clinical_mapping_queries,
+from cbio_curation_assistant.cbioportal.clinical_mapping.clinical_files import (
     read_clinical_header,
+)
+from cbio_curation_assistant.cbioportal.clinical_mapping.models import (
+    ClinicalMappingReport,
+)
+from cbio_curation_assistant.cbioportal.clinical_mapping.queries import (
+    parse_clinical_mapping_queries,
+)
+from cbio_curation_assistant.cbioportal.clinical_mapping.report_builder import (
+    build_clinical_mapping_report,
+)
+from cbio_curation_assistant.cbioportal.clinical_mapping.validation import (
     validate_clinical_mapping_report,
 )
 
@@ -35,7 +43,9 @@ def _attribute(
     )
 
 
-def _write_clinical_file(path: Path, columns: list[ClinicalDictionaryAttribute]) -> None:
+def _write_clinical_file(
+    path: Path, columns: list[ClinicalDictionaryAttribute]
+) -> None:
     metadata_fields = ("display_name", "description", "datatype", "priority")
     rows = [
         "#" + "\t".join(str(getattr(column, field)) for column in columns)
@@ -263,9 +273,7 @@ class ClinicalMappingValidationTest(unittest.TestCase):
                 "mappings": [
                     {
                         "id": "ihc",
-                        "candidates": [
-                            {"column_header": "IMMUNOHISTOCHEMISTRY"}
-                        ],
+                        "candidates": [{"column_header": "IMMUNOHISTOCHEMISTRY"}],
                         "decision": {
                             "status": "standard",
                             "selected_column_header": "IMMUNOHISTOCHEMISTRY",

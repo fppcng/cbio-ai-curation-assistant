@@ -27,7 +27,10 @@ from cbio_curation_assistant.integrations.pmc import (
 from cbio_curation_assistant.supplements.formats import (
     SUPPORTED_SUPPLEMENT_EXTENSIONS,
 )
-from cbio_curation_assistant.workspace import StudyWorkspace, resolve_assistant_home
+from cbio_curation_assistant.workspace.configuration import resolve_assistant_home
+from cbio_curation_assistant.workspace.layout import StudyWorkspace
+from cbio_curation_assistant.workspace.lifecycle import initialize_workspace
+from cbio_curation_assistant.workspace.manifest import workspace_manifest_paths
 
 
 DOWNLOAD_RESULT_VERSION = 1
@@ -307,9 +310,7 @@ def _ensure_article_pdf(
                 shutil.copy2(downloaded_pdf, article_pdf_path)
                 return article_pdf_path.resolve(), False
         except PMCRequestError as exc:
-            warnings.append(
-                f"Article PDF download failed: {format_pmc_error(exc)}"
-            )
+            warnings.append(f"Article PDF download failed: {format_pmc_error(exc)}")
             return None, False
         except Exception as exc:
             warnings.append(f"Article PDF download failed: {exc}")
@@ -378,9 +379,7 @@ def _build_result_payload(
         schema_version=DOWNLOAD_RESULT_VERSION,
         study_id=workspace.study_id,
         study_manifest=workspace.relative_to_root(workspace.manifest_path),
-        download_manifest=workspace.relative_to_root(
-            workspace.download_manifest_path
-        ),
+        download_manifest=workspace.relative_to_root(workspace.download_manifest_path),
         workspace=DownloadWorkspacePaths(
             assistant_home=workspace.assistant_home,
             study_root=workspace.root.resolve(),
@@ -388,15 +387,13 @@ def _build_result_payload(
             study_manifest=workspace.manifest_path.resolve(),
             download_manifest=workspace.download_manifest_path.resolve(),
         ),
-        managed_paths=workspace.as_manifest_paths(),
+        managed_paths=workspace_manifest_paths(workspace),
         resolved_identifier=resolved,
         xml=xml_record,
         article_pdf=article_pdf_record,
         supplementary=SupplementaryArtifacts(
             directory=workspace.supplementary_dir.resolve(),
-            relative_directory=workspace.relative_to_root(
-                workspace.supplementary_dir
-            ),
+            relative_directory=workspace.relative_to_root(workspace.supplementary_dir),
             present=workspace.supplementary_dir.is_dir(),
             reused=supplementary_reused,
             files=tuple(supplementary_files),
@@ -436,7 +433,7 @@ def run_study_download(
         resolved.pmcid,
         assistant_home=assistant_home,
     )
-    workspace.initialize()
+    initialize_workspace(workspace)
 
     warnings: list[str] = []
     _, xml_reused = _ensure_xml(workspace.article_xml_path, resolved.pmcid)
