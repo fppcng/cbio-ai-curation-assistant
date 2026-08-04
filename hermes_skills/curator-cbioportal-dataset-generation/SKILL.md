@@ -14,7 +14,9 @@ Use when the user asks for a complete cBioPortal dataset starting from a study i
 
 ## Required references and delegated skills
 - Read the documentation under `${HERMES_SKILL_DIR}/references` before starting the curation workflow.
-- Use `cBioPortal_Data_Curation_SOP` and `cBioPortal_File_Formats` as shared context for the overall study structure, naming conventions, allowed values, formatting requirements, validation rules, and data-transformation constraints.
+- Use delegated skills as the authoritative source for clinical, mutation, structural-variant, and other file types that have a dedicated skill.
+- Do not use the generic references to override file-specific delegated skills.
+- Read `references/validator-and-clinical-pitfalls.md` before final validation.
 - Treat these references as cross-cutting guidance for the complete dataset.
 - Follow the delegated skills for detailed, file-specific generation instructions. Each delegated skill is responsible for the interpretation, mapping, transformation, and validation rules associated with the file types it generates.
 - For cBioPortal file types that do not have a delegated skill, follow `cBioPortal_Data_Curation_SOP` and `cBioPortal_File_Formats` directly.
@@ -35,6 +37,10 @@ Use when the user asks for a complete cBioPortal dataset starting from a study i
 uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation workspace describe \
   --study-id <study_id>
 ```
+- If workspace discovery fails because the study manifest does not exist, do not infer or create workspace paths manually.
+- If the available identifier is a PMID or PMCID, use `abstractor-study-download`, take the returned `result.study_id`, and rerun
+  workspace discovery with that value.
+- If no PMID or PMCID is available, report that the workspace cannot be initialized and ask the user for a publication identifier.
 2. Use only the absolute paths returned under discovery `result`. Do not infer paths from repository layout.
 3. Read the documentation under `${HERMES_SKILL_DIR}/references` for general understanding of the task.
 4. Ensure study source artifacts are available.
