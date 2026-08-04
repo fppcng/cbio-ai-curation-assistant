@@ -55,9 +55,11 @@ Omit `--patient-file` when no patient file exists. Do not finish until validatio
 - Do not exclude a clinically meaningful field merely because no standard dictionary term exists or a standard mapping would require undocumented collapse.
 
 ## SOMATIC_STATUS Column
-- `SOMATIC_STATUS` must be included in `data_clinical_sample.txt` and assigned to each tumor sample.
+- Treat `SOMATIC_STATUS` as a strongly recommended project attribute, although it is not required by the base cBioPortal clinical-file format.
 - It indicates whether the tumor sample has a matched normal sample from the same patient.
 - Allowed values:
   - `Matched`: a matched normal sample was used for the analysis.
   - `Unmatched`: the tumor was analyzed without a matched normal sample.
 - The value should be determined at the sample level using the publication methods, supplementary data, sample manifests, or matched-normal information in the mutation data. It must not be inferred solely from the presence of somatic mutations.
+- If it cannot be determined, omit the column rather than fabricating values.
+- Continue generating the remaining clinical files, but report the missing status, affected sample IDs, and mark the clinical result as partial.
