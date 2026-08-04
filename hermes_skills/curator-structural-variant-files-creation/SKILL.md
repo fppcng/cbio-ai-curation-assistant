@@ -15,25 +15,21 @@ Use this skill when the user asks to generate structural variant or fusion files
 Read:
 - `references/structural_variant_file_formats.md`
 
+## Role of the curation report
+Use the abstractor report as a guide for locating promising supplementary files, but always inspect the underlying supplementary files directly before deciding whether structural variant curation is supported. Do not make that decision from the abstractor report alone.
+
+## Comments, notes and annotations in source files
+When a source file is an Excel workbook, inspect any cell comments, notes, or annotations that are present. Treat them as potentially important evidence for interpreting sheet structure, column meaning, filters, exclusions, and call semantics.
+
 ## Main rules
 - Only create `data_sv.txt` and `meta_sv.txt` from real per-sample structural variant or fusion rows present in local tables, spreadsheets, manifests, or reportable study artifacts.
-- Use the abstractor report as a guide for locating promising supplementary files, but always inspect the underlying supplementary files directly before deciding whether structural variant curation is supported.
 - Do not fabricate structural variant rows from narrative mentions, cohort summaries, pathway diagrams, assay descriptions, or gene-level statements without sample-level calls.
 - Do not create empty placeholder files just because structural variants are expected by the study design.
 - `Sample_Id` values must match the study clinical sample identifiers when `data_clinical_sample.txt` is available.
 - Use one study-level genome build only. Do not mix `GRCh37` and `GRCh38` within the same file.
 - Populate required and optional columns only from source-supported values. Do not infer breakpoints, exons, transcript IDs, read counts, frame effect, or event class unless the source supports them.
-- Set `SV_Status` only from supported study context. If the source does not support a required status for a row, do not emit that row.
-- When a source file is an Excel workbook, inspect any cell comments, notes, or annotations that are present. Treat them as potentially important evidence for interpreting sheet structure, column meaning, filters, exclusions, and call semantics.
+- Set `SV_Status` only from supported study context or supplementary files. If the source does not support a required status for a row, do not emit that row.
 - If the available evidence is insufficient for a valid structural variant file, report the gap explicitly instead of generating a speculative file.
-
-## Minimum evidence required for `data_sv.txt`
-At minimum, each emitted row must have:
-- `Sample_Id`
-- `SV_Status`
-- at least one supported gene site identifier:
-  - `Site1_Hugo_Symbol` or `Site1_Entrez_Gene_Id`, or
-  - `Site2_Hugo_Symbol` or `Site2_Entrez_Gene_Id`
 
 ## Workflow
 1. Run workspace discovery for the requested study and parse the JSON response:
@@ -45,12 +41,10 @@ uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation workspace describ
 3. Ensure study source artifacts are available by inspecting `result.workspace.source` and relevant discovery availability fields.
   - If the required publication or supplementary files are missing, use the `abstractor-study-download` skill, then rerun workspace discovery.
 4. Ensure the study abstractor agent report is available using `result.artifacts.curation_report_agent` and `result.availability.curation_report_agent`.
-  - If it is missing, use the `abstractor-curation-report-generation` skill, then rerun workspace discovery.
-5. Read the abstractor agent report to identify promising supplementary files. Use it as supporting context, not as a substitute for inspecting the source files directly.
+  - If it is missing, use the `abstractor-curation-report-generation` skill.
+5. Read the abstractor agent report to identify promising supplementary files.
 6. Read candidate supplementary files directly from the discovered source/supplementary paths to determine whether they contain real per-sample rows that satisfy the minimum evidence requirements. Do not make that decision from the abstractor report alone.
-  - When a candidate file is an Excel workbook, inspect any cell comments, notes, or annotations that may affect interpretation of the data.
-7. Determine whether the source contains real per-sample rows that satisfy the minimum evidence requirements.
-  - If not, do not create the structural variant files; report that the study does not currently support source-grounded SV curation.
+7. Determine whether the source contains real per-sample rows that satisfy the minimum evidence requirements. If not, do not create the structural variant files; report that the study does not currently support source-grounded SV curation.
 8. Normalize sample identifiers against `data_clinical_sample.txt` under `result.workspace.curated` when that file already exists.
   - Do not silently rewrite sample identifiers to values that cannot be traced back to the source or clinical sample file.
   - If the source uses a trivially different delimiter form (for example `-` in one sheet and `_` in the clinical sample file) and the mapping is one-to-one, normalize it explicitly and report that normalization.
@@ -59,8 +53,6 @@ uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation workspace describ
 10. Create `data_sv.txt` under `result.workspace.curated`.
   - Include the required columns for every emitted row.
   - Add optional columns only when they are directly supported by the source data.
-  - When the source provides fusion-partner genes but not breakpoint-level detail, it is acceptable to create rows with the supported gene-site fields only.
-  - Preserve source meaning when mapping into cBioPortal fields such as `Class`, `Event_Info`, `Annotation`, `Connection_Type`, and read-support columns.
 11. Create `meta_sv.txt` under `result.workspace.curated` with cBioPortal-compliant structural variant metadata.
   - Use `genetic_alteration_type: STRUCTURAL_VARIANT`
   - Use `datatype: SV`
