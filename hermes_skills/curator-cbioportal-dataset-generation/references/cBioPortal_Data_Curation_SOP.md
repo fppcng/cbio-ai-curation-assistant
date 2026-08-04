@@ -50,29 +50,7 @@ The detailed steps are explained below.
 
 B. Identifying the Data Sources
 
-Identifying appropriate data sources is a crucial initial step in delivering meaningful cancer genomics data to the public through cBioPortal. The curation team consistently works to streamline this process and present valuable data to the broader scientific community.  
-   
-cBioPortal aims to collaborate and pull data from a large range of sources, including individual publications, large consortium studies, and reliable cancer databases as outlined below.
-
-1. Journals:
-
-Scientific journals periodically publish research papers in various fields to advance science. cBioPortal focuses on cancer and genomics-oriented journals, some of which are the Journal of Clinical Oncology (JCO), Nature Genetics and Nature Oncology, Cell, and Blood. Methods of staying up to date with cancer genomics publications include:
-
-1. Advanced Searches:
-
-Advanced searches are an effective way to extract selected content from journals, and when used alongside the ‘saved search’ function, it enables daily alerts for new and relevant publications based on a predefined keyword search method. This reduces the time taken to identify suitable publications, and filters the results list based on previously saved selections that meet the inclusion criteria of the portal.
-
-2. Pubcrawler:
-
-Similarly, Pubcrawler is an alerting service for PubMed and GenBank, delivering daily updates of relevant content based on a saved search query. PubMed, a biomedical journal, and GenBank, an NIH nucleotide sequence database, serve as significant data sources for the portal.
-
-       2\.    Large consortium studies  
-Consortium studies, like The Cancer Genome Atlas (TCGA), offer continuous cancer genomics data for large cohorts over extended periods. TCGA, a key source in cBioPortal, provides molecular data for over 20,000 cancers and matched normal samples across 33 cancer types. Additionally, collaborations with other consortiums, such as the Cancer Cell Line Encyclopedia (CCLE), Glioma Longitudinal AnalySiS (GLASS) and many other consortiums present as effective data sources with which cBioPortal collaborates to spread valuable cancer genomics data.
-
-       3\.   Cancer Databases  
-Cancer databases like Dependency Map (DepMap), Catalog of Somatic Mutations In Cancer (COSMIC), and Genomic Data Commons (GDC) are vital references for cBioPortal. They provide valuable cancer genomics data for integration into the portal.  
-   
-The process of identifying data sources is continuously developed to ensure the addition of optimal and beneficial datasets into cBioPortal. Developments in technology and artificial intelligence are being utilized to streamline the process and help progress cBioPortal into the most comprehensive and precise cancer genomics database.
+For source acquisition, follow the `abstractor-study-download` skill to acquire or reuse canonical publication and supplementary artifacts.
 
 C. Inclusion Criteria
 
