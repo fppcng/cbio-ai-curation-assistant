@@ -113,20 +113,6 @@ The segmented data is usually presented in the publication’s supplementary fil
 
 In the portal, segmented data can be found in the 'CNA' lane in the Genomic overview of the patient view.
 
-**Gene Panel Data**
-
-A gene panel is a collection of genes grouped to allow simultaneous sequencing of all the genes associated with a certain disease. The gene panel functionality specifies which genes are assayed in a panel and assigns samples and genetic profiles (such as mutation data) to a panel. This data type consists of a gene panel file, a gene panel matrix file, and a meta file.  
-   
-The gene panel file itself contains a list of all the genes in a panel, where one panel can be used for multiple studies within the instance and should be loaded prior to loading a study with gene panel data. For information on the format and import process please visit the [Import-Gene-Panels](https://docs.cbioportal.org/import-gene-panels/) page.
-
-The gene panel matrix file is used to specify which samples are sequenced on which gene panel and in which genetic profile. This is recommended for mutation and structural variant data, because MAF and structural variant file formats are unable to include samples which are sequenced but contain no called mutations, and only a single gene panel can be defined in the meta file. For other genetic profiles, columns can be added to specify their gene panel, but a property can also be added to their respective meta files, as these data files contain all profiled samples. Although the gene panel matrix functionality overlaps with the case list functionality, a case list for mutations (\_sequenced) and structural variants (\_sv) is also required. In addition, a gene panel meta file will assign all samples from that profile to the gene panel. In this case, it is not necessary to include a column for this profile in the gene panel matrix file.  
-   
-The ‘[Gene Panel Data’](https://docs.cbioportal.org/file-formats/#gene-panel-data) section of the file formats further explains the contents of each of the files mentioned above.
-
-A gene panel matrix file contains a list of samples in the first column, and an additional column for each profile in the study, where for each sample-profile combination, a gene panel should be specified. The gene panel matrix data file can be created using data present in the publication’s supplementary files. Usually, the clinical supplementary files will indicate which sample was profiled/sequenced and the paper will discuss the gene panel used. 
-
-In the portal, the gene panel table or chart can be found in the study summary page, where further analysis can be done by selecting a certain panel for cohort analysis or comparison.
-
 **Expression Data:**  
    
 Gene expression is the process where the information in a gene is used to create a functional product, which can be a protein or RNA molecule. This process begins with transcription, where a gene's DNA is converted into RNA. In the case of protein-coding genes, the next step is translation, where the RNA is turned into a protein.  
