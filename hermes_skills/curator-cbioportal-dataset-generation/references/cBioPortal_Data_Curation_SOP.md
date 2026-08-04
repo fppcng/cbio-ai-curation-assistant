@@ -1,5 +1,4 @@
 # cBioPortal Data Curation Standard Operating Procedure
-#  Version 1.0 | Release Date 
 # Tables of Contents
 
 1. Introduction  
@@ -34,20 +33,16 @@
 5. Data Quality Control  
    1. Compare the analysis to the published article  
 6. Data Analysis in cBioPortal  
-   1. Screenshots to how the data can be analyzed.  
 7. Big Picture Updates  
    1. Gene Tables
 
 1. # Introduction
 
-The cBioPortal for Cancer Genomics ([http://cbioportal.org](http://cbioportal.org)) is a web resource designed for exploring and analyzing multidimensional cancer genomics data. It simplifies molecular profiling data from cancer tissues and cell lines into easily understandable genetic, epigenetic, gene expression, and proteomic events. Researchers can interactively explore genetic alterations across samples, genes, and pathways, linking them to clinical outcomes when available\[Fig 1\]. The portal offers graphical summaries, network visualization, survival analysis, patient-centric queries, and programmatic access. Its user-friendly interface makes complex cancer genomics profiles accessible to researchers and clinicians without requiring bioinformatics expertise. Originally developed at Memorial Sloan Kettering Cancer Center, cBioPortal is now an open-source project hosted on GitHub and collaboratively maintained by a team from various institutions worldwide.
+The cBioPortal for Cancer Genomics ([http://cbioportal.org](http://cbioportal.org)) is a web resource designed for exploring and analyzing multidimensional cancer genomics data. It simplifies molecular profiling data from cancer tissues and cell lines into easily understandable genetic, epigenetic, gene expression, and proteomic events. Researchers can interactively explore genetic alterations across samples, genes, and pathways, linking them to clinical outcomes when available. The portal offers graphical summaries, network visualization, survival analysis, patient-centric queries, and programmatic access. Its user-friendly interface makes complex cancer genomics profiles accessible to researchers and clinicians without requiring bioinformatics expertise. Originally developed at Memorial Sloan Kettering Cancer Center, cBioPortal is now an open-source project hosted on GitHub and collaboratively maintained by a team from various institutions worldwide.
 
-The data coming in cBioPortal from different data sources as seen in Figure 1, requires data curation and normalization efforts that allow for users to visualize and navigate datasets that are standardized therefore making cross study comparisons easier and accurate.
+The data coming in cBioPortal from different data sources requires data curation and normalization efforts that allow for users to visualize and navigate datasets that are standardized therefore making cross study comparisons easier and accurate.
 
 # A. Data Curation Workflow
-
-![][image2]  
-Figure 2: Data Curation Workflow
 
 The curation process for cBioPortal begins by identifying data resources rich in clinical and cancer genomic information. This involves understanding the underlying research, checking data availability, and extracting and transforming the data to meet cBioPortal standards. Additional annotations are incorporated, quality control (QC) is performed, and the data is then imported into cBioPortal. Subsequent QC steps are taken within the portal to ensure the accuracy of the data.
 
@@ -106,7 +101,13 @@ II. Introduction to cBioPortal File Formats and Data Abstraction
 
 A study to be loaded in cBioPortal should consist of a directory where all the data files are located. Each data file needs a meta file that refers to it and both files need to comply with the format required for the specific data type. The format and fields expected for each file are documented in the [File Formats page](https://docs.cbioportal.org/file-formats/). The following provides detailed explanations for each data type, including the curation process and conversion to the accepted formats for the portal.
 
+**Clinical Data**
 
+For clinical data curation, follow the `curator-clinical-files-creation` skill.
+
+**Mutation Data**
+
+For mutation data curation, follow the `curator-mutation-data-file-creation` skill.
 
 **Timeline Data**
 
@@ -114,9 +115,7 @@ Timeline data files represent a sequence of events occurring during the course o
    
 Each event type requires its own data file, which consists of [four required columns](https://docs.cbioportal.org/file-formats/#data-file-11), in addition to other relevant descriptive columns that can be added to each event type file. [Event types](https://docs.cbioportal.org/file-formats/#event-types) include treatment, surgery, diagnostics, specimen, and various others.  
    
-Although not provided for all studies, the data used to construct timeline files is readily available in the clinical files of the publication, which are usually found in the paper’s supplementary files or deposited in a database where the study data is archived. Any type of data that shows patient progression through a certain event type can be used to construct timeline data files, which is later be represented as one or more tracks in the patient view area of the portal as shown below.
-
-![][image8]
+Although not provided for all studies, the data used to construct timeline files is readily available in the clinical files of the publication, which are usually found in the paper’s supplementary files or deposited in a database where the study data is archived. Any type of data that shows patient progression through a certain event type can be used to construct timeline data files, which is later represented as one or more tracks in the patient view area of the portal.
 
 **Segmented Data**
 
@@ -134,8 +133,7 @@ The ‘[Segmented Data’](https://docs.cbioportal.org/file-formats/#segmented-d
 
 The segmented data is usually presented in the publication’s supplementary files, which are freely available for download. Usually, this type of data is provided whenever copy number data is analyzed and is calculated by the authors from copy number data using the CBS algorithm. If present, a .seg file will contain the 6 required columns mentioned above. However, column names may vary in some files yet describe similar aspects of CNA segmentation. For example, ‘NumProbes’ corresponds to ‘num.mark’ which indicates the number of probes or bins covered by a specific segment. Even though both namings have the same meaning, cBioPortal recognizes the columns as listed above.
 
-In the portal, segmented data can be found in the 'CNA' lane in the Genomic overview of the patient view as shown below.  
-![][image9]
+In the portal, segmented data can be found in the 'CNA' lane in the Genomic overview of the patient view.
 
 **Gene Panel Data**
 
@@ -149,8 +147,7 @@ The ‘[Gene Panel Data’](https://docs.cbioportal.org/file-formats/#gene-panel
 
 A gene panel matrix file contains a list of samples in the first column, and an additional column for each profile in the study, where for each sample-profile combination, a gene panel should be specified. The gene panel matrix data file can be created using data present in the publication’s supplementary files. Usually, the clinical supplementary files will indicate which sample was profiled/sequenced and the paper will discuss the gene panel used. 
 
-In the portal, the gene panel table or chart can be found in the study summary page as shown below in an example from a MSK pancreatic tumor study, where further analysis can be done by selecting a certain panel for further cohort analysis or comparison.   
-![][image10]![][image11]
+In the portal, the gene panel table or chart can be found in the study summary page, where further analysis can be done by selecting a certain panel for cohort analysis or comparison.
 
 **Expression Data:**  
    
@@ -200,16 +197,9 @@ Make sure the “show\_profile\_in\_analysis\_tab” field in the metadata file 
 
 Please see the cBioPortal [recommended](https://github.com/cBioPortal/datahub/blob/master/docs/recommended_staging_filenames.md) data and meta file names based on the protein quantification type when pushing the data to the public [cBioPortal](https://www.cbioportal.org/).
 
-**Structural Variants:**
+**Structural Variant Data**
 
-Structural variants (SVs) are a type of genetic variation that involves alterations in the structure of DNA molecules, including larger-scale changes in the genome. These changes can be associated with the addition, deletion, inversion, duplication, or translocation of DNA segments. Structural variants can have significant effects on an individual's genetics, and when they occur in specific regions, they can play a role in the development and progression of cancer. 
-
-When preparing structural variant data for cBioPortal, it is important to follow the data format and metadata:
-
-1. **Data Format:** A structural variant data file is a tab-delimited file with one structural variant per row. In order to create a minimum SV file we need a minimum of Site1\_Hugo\_Symbol, Site2\_Hugo\_Symbol, Sample\_Id, SV\_Status (Somatic vs Germline) and Event\_Info column. Convert the data to the format as listed in te cBioPortal  [file-formats](https://docs.cbioportal.org/file-formats/#expression-data). The link provides a detailed explanation of column names that can be curated from the publication.  
-2. **Meta Data**: Add a metadata file including publication details, experimental methodologies, and any additional relevant information, will be annotated along with the curated data to provide context.
-
-![][image12]
+For structural variant data curation, follow the `curator-structural-variant-files-creation` skill.
 
 #### **Gene panels for Structural Variant data**
 
@@ -238,8 +228,6 @@ Copy number alterations (CNAs) at the arm level refer to large-scale changes in 
 Arm level Copy Number events are now loaded into cBioPortal using the Categorial Generic Assay Data Type. They can be found in a tab under the Add Charts Button of the Study View   
 [Example: Arm Level Data in TCGA PanCancer Atlas](https://www.cbioportal.org/study/summary?id=laml_tcga_pan_can_atlas_2018%2Cacc_tcga_pan_can_atlas_2018%2Cblca_tcga_pan_can_atlas_2018%2Clgg_tcga_pan_can_atlas_2018%2Cbrca_tcga_pan_can_atlas_2018%2Ccesc_tcga_pan_can_atlas_2018%2Cchol_tcga_pan_can_atlas_2018%2Ccoadread_tcga_pan_can_atlas_2018%2Cdlbc_tcga_pan_can_atlas_2018%2Cesca_tcga_pan_can_atlas_2018%2Cgbm_tcga_pan_can_atlas_2018%2Chnsc_tcga_pan_can_atlas_2018%2Ckich_tcga_pan_can_atlas_2018%2Ckirc_tcga_pan_can_atlas_2018%2Ckirp_tcga_pan_can_atlas_2018%2Clihc_tcga_pan_can_atlas_2018%2Cluad_tcga_pan_can_atlas_2018%2Clusc_tcga_pan_can_atlas_2018%2Cmeso_tcga_pan_can_atlas_2018%2Cov_tcga_pan_can_atlas_2018%2Cpaad_tcga_pan_can_atlas_2018%2Cpcpg_tcga_pan_can_atlas_2018%2Cprad_tcga_pan_can_atlas_2018%2Csarc_tcga_pan_can_atlas_2018%2Cskcm_tcga_pan_can_atlas_2018%2Cstad_tcga_pan_can_atlas_2018%2Ctgct_tcga_pan_can_atlas_2018%2Cthym_tcga_pan_can_atlas_2018%2Cthca_tcga_pan_can_atlas_2018%2Cucs_tcga_pan_can_atlas_2018%2Cucec_tcga_pan_can_atlas_2018%2Cuvm_tcga_pan_can_atlas_2018).
 
-![][image13]
-
 **Methylation Data:** 
 
 Methylation data refers to information about the DNA methylation patterns in a biological sample, typically in the context of a genome or epigenome analysis. DNA methylation is an epigenetic modification that involves the addition of a methyl group (CH3) to the DNA molecule, specifically at cytosine bases. It plays a crucial role in gene regulation, cellular differentiation, development, and various biological processes. 
@@ -249,8 +237,6 @@ When preparing methylation data for cBioPortal, it is important to follow the fo
 
 1. **Data Format :** The cBiPortal expects a single value for each gene in each sample, usually a beta-value from the Infinium methylation array platform.Convert the data to the format as listed in the cBioPortal [file-formats](https://docs.cbioportal.org/file-formats/#expression-data)**.**  
 2. **Meta Format:** Add a metadata file along with the methylation data.This metadata file should contain essential information, such as the  methylation array platform ( 27k,450k,EPIC) and any additional relevant information, will be annotated along with the curated data to provide context.
-
-**![][image14]**
 
 To query Methylation probes in the portal you can either use gene name or with an unique probe id. Alternatively, you can use aliases such as EGFR or cg14094960 (Probe ID), and the portal will prompt you to choose the specific gene/probe of your preference.
 
@@ -310,8 +296,6 @@ N-glycoproteome quantification is the process of measuring and determining the a
 
 Genome Nexus (GN) is a [resource](https://github.com/genome-nexus) developed by Memorial Sloan Kettering Cancer Center (MSK) with contributions from The Hyve. It is a comprehensive tool for fast, automated, and high-throughput annotation and interpretation of genetic variants in cancer. GN integrates information from a variety of existing resources, including databases that convert DNA changes to protein changes, predict the functional effects of protein mutations, and contain information about mutation frequencies, gene function, variant effects, and clinical actionability.  
    
- ![][image15]  
-   
 The software is available under an open-source license via GitHub, where multiple repositories and tools allow the execution of various functions related to mutation data.
 
 **Validator**
@@ -324,8 +308,6 @@ The cBioPortal validator has several roles, including:
 2. Examining study files for completeness: The validator examines the core components (data files, meta files, and case lists) of a study folder for completeness and accuracy. The files are scanned to ensure they are in the correct [format](https://docs.cbioportal.org/file-formats/) and all the data is accounted for, eliminating errors of duplicate, missing, or incorrect data.  
 3. Generation of a cBioPortal Validation Report: the output of running the validator is an HTML report that describes the study components and indicates any warnings or errors that will cause improper loading into the portal.
 
-![][image16]
-
 The validator tool can be used in two instances; as a [standalone](https://github.com/cBioPortal/datahub-study-curation-tools/tree/master/validation/validator) version of cBioPortal data validator, and through [CircleCI](https://github.com/cBioPortal/datahub/tree/master/.circleci) in [Datahub](https://github.com/cBioPortal/datahub) on a submitted pull request (PR). 
 
 The standalone validator can be used by [cloning the study curation tools repository](https://github.com/cBioPortal/datahub-study-curation-tools/tree/master) to validate single or multiple studies formatted in cBioPortal format. The HTML validation report gives the curator feedback used to correct, enhance, and double check the curated study before import. In addition, the validator is automatically run by CircleCI in Datahub whenever a PR is created, and on all public studies on a weekly basis. CircleCI conducts a number of checks and validates whether study tests pass on CircleCI, allowing the curator to assign a reviewer to review the PR before merging to the master branch. 
@@ -335,46 +317,6 @@ The standalone validator can be used by [cloning the study curation tools reposi
 Quality control (QC) is an essential part of the curation process; studies go through multiple rounds of QC procedures including validation and review to ensure that data imported into the portal is accurate and reliable. When a study is curated following the cBioPortal file formats, it is scanned by the curator against the [Public Studies Curation Checklist](https://docs.google.com/document/d/1bbBUMARD0OlL7uBi3NmNLdHaBla4HxXz3UCVk_kk2Rk/edit). This document describes essential points to verify before a study is validated and added to the cBioPortal public database, highlighting points for each file type and checking for the overall study. In addition, general checks include [migrating outdated gene symbols](https://github.com/cBioPortal/datahub-study-curation-tools/tree/master/gene-table-update/data-file-migration) and making sure all files are stored as text files in character set to Unicode(UTF-8) and Unix(LF).  
    
 After finalizing the study and following the public studies curation checklist, studies are validated using a standalone local [validator](https://github.com/cBioPortal/datahub-study-curation-tools/tree/master/validation/validator), which can be cloned from the [datahub-study-curation-tools](https://github.com/cBioPortal/datahub-study-curation-tools/tree/master), and automatically runs by [CircleCI](https://github.com/cBioPortal/datahub/tree/master/.circleci) on the cBioPortal [Datahub](https://github.com/cBioPortal/datahub). The validator validates single or multiple studies formatted in cBioPortal [file formats](https://docs.cbioportal.org/file-formats/), and outputs reports in both plain text and HTML format. The validation report is color coded to identify information, warnings, and errors. When a filename is selected, the report provides the error messages to identify issues that need to be fixed. Red error messages must be addressed before a study is imported to the portal.  
-![][image17]   
-   
-After the study is validated, a Datahub Pull Request (PR) is created, where CircleCi would automatically run and once validation passes, two-rounds of review are required before merging the PR.
+
 
 For the review process, the study should be imported to the [Triage](https://triage.cbioportal.mskcc.org/) portal, cBioPortal’s testing instance. The review process consists of 2 rounds of review, where the study is reviewed in the Triage portal against the publication by other curators to ensure all available data in the paper has been added and the study follows cBioPortal formats, allowing the curator to edit and fix review points after the first round to finalize the study for the second round of review. After review, the completed public studies are imported to [cBioPortal](https://www.cbioportal.org/) page. Internal and private MSK studies are added to the MSK or private portal.
-
-1\. Identifying data sources:  
-	\- Publications.  
-	\- Large consortiums.  
-	\- Cancer databases.  
-	\- Inclusion criteria.  
-	  
-2\. Introduction to cBio file formats.  
-	\- A brief introduction to each datatype and the cBio format (This can be link to the file-formats page)  
-	  
-3\. Data Extraction.  
-	\- How do we pull the data from the source. What key points do we look for?  
-	\- Reach out to the authors..  
-	  
-4\. Data Standardization  
- 	\- Introduction to different curation tools we use to transform the data to required formats  
- 	\- Clinical transformation tools  
- 	\- Oncotree  
- 	\- Genome Nexus  
- 	\- Validator  
- 	\- .....  
- 	  
-4\. Data Import and QC
-
-- Data file QC  
-- local cBio instance   
-- Metaimport.py  
-- Overall Study QC  
-- Triage portal, msk, circleci
-
-5\. Releasing data to Public
-
-—-  
-Our annual big picture stuff we do
-
-- Our gene table updates  
-- 
-
