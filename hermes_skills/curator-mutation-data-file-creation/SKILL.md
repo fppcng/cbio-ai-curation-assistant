@@ -13,6 +13,8 @@ Use this skill when the user wants `data_mutations.txt` generated from local mut
 Read:
 - `references/minimal-maf-workflow.md`
 - `references/mutation-sanity-checks.md`
+- `references/mutation_data_SOP.md`
+- `references/mutations_data_file_formats.md`
 
 ## Main rule
 Only create `data_mutations.txt` from real per-sample variant rows with genomic coordinates and alleles. Do not fabricate mutation files from summary tables, prose, or assay flags alone.
