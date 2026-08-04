@@ -30,6 +30,8 @@ Use when the user asks for a complete cBioPortal dataset starting from a study i
 - Do not fabricate required fields solely to satisfy the cBioPortal schema or validator.
 - Do not claim that the study is complete unless all expected generated files are present, internally consistent, and successfully validated.
 - Preserve assumptions, warnings, inferred decisions, validation errors, and unresolved issues throughout the workflow so they can be reported clearly to the user at the end.
+- Treat file-generation steps as conditional applicability checks, not unconditional output requirements. For each file type, use the available source evidence and the delegated skill to determine whether its minimum requirements are satisfied. Generate only supported files and report omitted or unsupported outputs.
+- The order of independent file-generation steps is flexible, but respect actual dependencies between outputs and run final validation only after all supported files have been finalized.
 
 ## Workflow
 1. Run workspace discovery for the requested study and parse the JSON response:
