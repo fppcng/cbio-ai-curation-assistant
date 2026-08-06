@@ -34,6 +34,8 @@ uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation genome-nexus \
   --study-id "<study_id>" \
   --genome-build <GRCh37|GRCh38>
 ```
+The command uses the pre-provisioned, checksum-locked Java runner. Do not clone
+or rebuild Genome Nexus as part of an individual study workflow.
 6. Inspect the JSON envelope. A `success` result reports canonical files under `result`; a `partial_success` reports candidate files under `result.attempt_directory` and does not replace canonical outputs. Report failed annotations explicitly.
 7. Apply the mutation sanity checks from the references before claiming the file is ready.
 

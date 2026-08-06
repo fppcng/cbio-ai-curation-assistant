@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "source_repository": "https://github.com/genome-nexus/genome-nexus-annotation-pipeline.git",
+  "source_ref": "v1.0.7",
+  "source_commit": "94052eb1a101237862b8e205e6bfa4481a41ffd7",
+  "jar_sha256": "6c6477e2faf3c3dd7e2550235d3ed34b86cd049b8a8a25a18cbe90d691731efd",
+  "java_major": 21
+}

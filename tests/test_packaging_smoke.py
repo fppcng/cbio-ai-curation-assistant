@@ -174,6 +174,10 @@ class InstalledWheelSmokeTest(unittest.TestCase):
                 names,
             )
             self.assertIn(
+                "cbio_curation_assistant/resources/genome_nexus_source.json",
+                names,
+            )
+            self.assertIn(
                 "cbio_curation_assistant/resources/clinical/clinical_dictionary_snapshot.json",
                 names,
             )

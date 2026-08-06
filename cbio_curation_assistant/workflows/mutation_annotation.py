@@ -70,7 +70,6 @@ class GenomeNexusAttemptArtifacts:
 @dataclass(frozen=True, slots=True)
 class GenomeNexusResult:
     genome_build: GenomeBuild
-    docker_image: str
     workspace: Path
     input_file: Path
     input_records: int
@@ -79,6 +78,16 @@ class GenomeNexusResult:
     failed_annotations: int
     annotation_status_counts: dict[str, int]
     record_count_mismatch: bool
+    runner: genome_nexus.RunnerName = "docker"
+    docker_image: str | None = None
+    java_binary: str | None = None
+    java_version: str | None = None
+    jar_path: Path | None = None
+    jar_sha256: str | None = None
+    pipeline_version: str | None = None
+    source_commit: str | None = None
+    genome_nexus_base_url: str | None = None
+    genome_nexus_version: str | None = None
     output_file: Path | None = None
     error_report: Path | None = None
     log_file: Path | None = None
@@ -100,7 +109,7 @@ class GenomeNexusResult:
     def to_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "genome_build": self.genome_build,
-            "docker_image": self.docker_image,
+            "runner": self.runner,
             "workspace": str(self.workspace),
             "input_file": str(self.input_file),
             "input_records": self.input_records,
@@ -110,6 +119,21 @@ class GenomeNexusResult:
             "annotation_status_counts": dict(self.annotation_status_counts),
             "record_count_mismatch": self.record_count_mismatch,
         }
+        if self.runner == "docker":
+            payload["docker_image"] = self.docker_image
+        else:
+            payload.update(
+                {
+                    "java_binary": self.java_binary,
+                    "java_version": self.java_version,
+                    "jar_path": str(self.jar_path) if self.jar_path else None,
+                    "jar_sha256": self.jar_sha256,
+                    "pipeline_version": self.pipeline_version,
+                    "source_commit": self.source_commit,
+                }
+            )
+        payload["genome_nexus_base_url"] = self.genome_nexus_base_url
+        payload["genome_nexus_version"] = self.genome_nexus_version
         if self.attempt is not None:
             payload.update(self.attempt.to_dict())
             payload.update(
@@ -269,11 +293,35 @@ def _write_execution_log(
     log_path.write_text(content, encoding="utf-8")
 
 
+def _runtime_result_fields(
+    runtime: genome_nexus.GenomeNexusRuntime,
+    *,
+    annotated_output: Path,
+) -> dict[str, Any]:
+    return {
+        "runner": runtime.runner,
+        "docker_image": runtime.docker_image,
+        "java_binary": runtime.java_binary,
+        "java_version": runtime.java_version,
+        "jar_path": runtime.jar_path,
+        "jar_sha256": runtime.jar_sha256,
+        "pipeline_version": runtime.pipeline_version,
+        "source_commit": runtime.source_commit,
+        "genome_nexus_base_url": runtime.genome_nexus_base_url,
+        "genome_nexus_version": genome_nexus.read_genome_nexus_version(
+            annotated_output
+        ),
+    }
+
+
 def run_genome_nexus_annotation(
     *,
     study_id: str,
     genome_build: GenomeBuild,
+    runner: genome_nexus.RunnerName = genome_nexus.DEFAULT_RUNNER,
     image: str = DEFAULT_IMAGE,
+    jar_path: str | Path | None = None,
+    java_binary: str = genome_nexus.DEFAULT_JAVA_BINARY,
     timeout: int = 1800,
     force: bool = False,
     assistant_home: str | Path | None = None,
@@ -301,16 +349,22 @@ def run_genome_nexus_annotation(
             (paths["output"], paths["error_report"], paths["log"]),
             force=force,
         )
-        genome_nexus.check_docker_image(image)
+        runtime = genome_nexus.prepare_runtime(
+            runner=runner,
+            genome_build=genome_build,
+            image=image,
+            java_binary=java_binary,
+            jar_path=jar_path,
+        )
 
         attempt_dir = create_attempt_directory(workspace)
         attempt_paths = canonical_paths(attempt_dir)
         shutil.copy2(input_path, attempt_paths["input"])
 
-        execution = genome_nexus.run_annotation_container(
+        execution = genome_nexus.run_annotation(
             attempt_dir,
             genome_build=genome_build,
-            image=image,
+            runtime=runtime,
             timeout=timeout,
         )
         _write_execution_log(attempt_paths["log"], execution)
@@ -319,7 +373,7 @@ def run_genome_nexus_annotation(
             raise PipelineError(f"Genome Nexus timed out after {timeout} seconds.")
         if execution.returncode != 0:
             raise PipelineError(
-                "Genome Nexus container failed with exit code "
+                f"Genome Nexus {runtime.runner} runner failed with exit code "
                 f"{execution.returncode}. See log: {attempt_paths['log']}"
             )
 
@@ -341,7 +395,6 @@ def run_genome_nexus_annotation(
         if count_mismatch or has_failed_annotations:
             result = GenomeNexusResult(
                 genome_build=genome_build,
-                docker_image=image,
                 workspace=workspace,
                 input_file=input_path,
                 input_records=input_summary.records,
@@ -367,6 +420,10 @@ def run_genome_nexus_annotation(
                     path.exists()
                     for path in (paths["output"], paths["error_report"], paths["log"])
                 ),
+                **_runtime_result_fields(
+                    runtime,
+                    annotated_output=attempt_paths["output"],
+                ),
             )
             return GenomeNexusRun(
                 status="partial_success",
@@ -384,7 +441,6 @@ def run_genome_nexus_annotation(
             status="success",
             result=GenomeNexusResult(
                 genome_build=genome_build,
-                docker_image=image,
                 workspace=workspace,
                 input_file=input_path,
                 input_records=input_summary.records,
@@ -396,6 +452,10 @@ def run_genome_nexus_annotation(
                 output_file=paths["output"],
                 error_report=paths["error_report"],
                 log_file=paths["log"],
+                **_runtime_result_fields(
+                    runtime,
+                    annotated_output=paths["output"],
+                ),
             ),
         )
     except (MafValidationError, genome_nexus.GenomeNexusIntegrationError) as exc:

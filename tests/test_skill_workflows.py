@@ -342,6 +342,8 @@ class GenomeNexusWorkflowTest(unittest.TestCase):
                     "missing",
                     "--genome-build",
                     "GRCh37",
+                    "--runner",
+                    "docker",
                     "--image",
                     "image",
                     "--timeout",
@@ -358,7 +360,10 @@ class GenomeNexusWorkflowTest(unittest.TestCase):
         run_annotation.assert_called_once_with(
             study_id="missing",
             genome_build="GRCh37",
+            runner="docker",
             image="image",
+            jar_path=None,
+            java_binary="java",
             timeout=1,
             force=False,
         )
@@ -483,6 +488,7 @@ class GenomeNexusWorkflowTest(unittest.TestCase):
                 run = mutation_annotation_workflow.run_genome_nexus_annotation(
                     study_id="pmc123",
                     genome_build="GRCh37",
+                    runner="docker",
                     image="image",
                     timeout=1,
                 )
@@ -549,6 +555,7 @@ class GenomeNexusWorkflowTest(unittest.TestCase):
                 run = mutation_annotation_workflow.run_genome_nexus_annotation(
                     study_id="pmc123",
                     genome_build="GRCh37",
+                    runner="docker",
                     image="image",
                     timeout=1,
                 )
@@ -596,6 +603,7 @@ class GenomeNexusWorkflowTest(unittest.TestCase):
                 run = mutation_annotation_workflow.run_genome_nexus_annotation(
                     study_id="pmc123",
                     genome_build="GRCh37",
+                    runner="docker",
                     image="image",
                     timeout=1,
                     force=True,
@@ -656,6 +664,7 @@ class GenomeNexusWorkflowTest(unittest.TestCase):
                 run = mutation_annotation_workflow.run_genome_nexus_annotation(
                     study_id="pmc123",
                     genome_build="GRCh37",
+                    runner="docker",
                     image="image",
                     timeout=1,
                     force=True,

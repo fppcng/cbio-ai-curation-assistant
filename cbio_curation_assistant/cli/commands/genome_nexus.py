@@ -5,16 +5,29 @@ from __future__ import annotations
 import argparse
 import os
 from collections.abc import Sequence
+from pathlib import Path
 
 from cbio_curation_assistant.cli.result import (
     CommandResult,
     command_error,
     command_result,
 )
+from cbio_curation_assistant.integrations import genome_nexus
 from cbio_curation_assistant.workflows.mutation_annotation import (
     DEFAULT_IMAGE,
     run_genome_nexus_annotation,
 )
+from cbio_curation_assistant.workspace.configuration import ENV_VAR_NAME
+
+
+def _default_jar_path() -> str | None:
+    configured = os.environ.get("GENOME_NEXUS_JAR_PATH", "").strip()
+    if configured:
+        return configured
+    assistant_home = os.environ.get(ENV_VAR_NAME, "").strip()
+    if not assistant_home:
+        return None
+    return str(Path(assistant_home) / genome_nexus.DEFAULT_JAR_RELATIVE_PATH)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -32,6 +45,26 @@ def _build_parser() -> argparse.ArgumentParser:
         required=True,
         choices=("GRCh37", "GRCh38"),
         help="Reference assembly. It must be explicitly known.",
+    )
+    parser.add_argument(
+        "--runner",
+        choices=("java", "docker"),
+        default=os.environ.get("GENOME_NEXUS_RUNNER", genome_nexus.DEFAULT_RUNNER),
+        help="Execution runtime. Default: java.",
+    )
+    parser.add_argument(
+        "--jar-path",
+        default=_default_jar_path(),
+        help=(
+            "Executable Genome Nexus annotationPipeline JAR. Used by the Java runner."
+        ),
+    )
+    parser.add_argument(
+        "--java-bin",
+        default=os.environ.get(
+            "GENOME_NEXUS_JAVA_BIN", genome_nexus.DEFAULT_JAVA_BINARY
+        ),
+        help="Java executable used by the Java runner. Default: java.",
     )
     parser.add_argument(
         "--image",
@@ -58,7 +91,10 @@ def run(argv: Sequence[str]) -> CommandResult[object]:
     annotation = run_genome_nexus_annotation(
         study_id=args.study_id,
         genome_build=args.genome_build,
+        runner=args.runner,
         image=args.image,
+        jar_path=args.jar_path if args.runner == "java" else None,
+        java_binary=args.java_bin,
         timeout=args.timeout,
         force=args.force,
     )

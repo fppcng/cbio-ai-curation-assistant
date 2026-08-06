@@ -3,6 +3,7 @@
 .env
 /AGENTS.md
 /.local-notes/
+/.local-tools/
 /documents
 
 # Study workspaces and generated curation data

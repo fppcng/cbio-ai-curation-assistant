@@ -51,10 +51,16 @@ Rules:
 ## Genome Nexus step
 
 The local runner:
+- executes the checksum-locked Genome Nexus JAR directly with Java, without Docker
 - validates the canonical `minimal_mutations.maf` before running
 - annotates with MSK isoform override
 - writes the canonical `data_mutations.txt`
-- emits a machine-readable JSON result
+- emits a machine-readable JSON result with client, source, JAR, Java, endpoint,
+  and remote Genome Nexus version provenance
 - saves `annotations_errors.txt` and `genome_nexus.log`
+
+The runner artifact is an installation prerequisite. An operator provisions it
+once with `scripts/bootstrap_genome_nexus_java.sh`; the curation agent must not
+rebuild it during a study run.
 
 Treat `partial_success` as a real warning state. Review both the JSON payload and the generated error report before considering the mutation file usable.
