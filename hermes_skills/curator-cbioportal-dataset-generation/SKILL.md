@@ -53,11 +53,12 @@ uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation workspace describ
 7. Generate mutation files using the `curator-mutation-data-file-creation` skill.
 8. Generate structural variant files using the `curator-structural-variant-files-creation` skill.
 9. Generate gene panel data using the `gene-panel-data-creation` skill.
-10. Generate any additional cBioPortal files supported by the available evidence.
+10. Generate discrete copy number files using the `discrete-copy-number-data-creation` skill.
+11. Generate any additional cBioPortal files supported by the available evidence.
   - Use delegated skills when they exist for the file type.
   - Otherwise follow `cBioPortal_Data_Curation_SOP` and `cBioPortal_File_Formats` directly.
-11. Save all generated cBioPortal data and metadata files under `result.workspace.curated`.
-12. Validate the generated dataset through the package CLI and the project selected by `CBIO_CURATION_ASSISTANT_HOME`:
+12. Save all generated cBioPortal data and metadata files under `result.workspace.curated`.
+13. Validate the generated dataset through the package CLI and the project selected by `CBIO_CURATION_ASSISTANT_HOME`:
 ```bash
 uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation validate-study \
   --study-id "<study_id>"
@@ -66,7 +67,7 @@ uv run --project "$CBIO_CURATION_ASSISTANT_HOME" cbio-curation validate-study \
   - Interpret validator results carefully: a warning-only run may return a non-zero exit code, so use the validator summary text as well as the exit status.
   - Do not claim successful validation unless the validator output has been reviewed.
   - If environment preparation or validator execution fails, report the blocker explicitly. Do not install validator dependencies into the main project environment or invoke the validator script directly.
-13. Report the final outcome to the user.
+14. Report the final outcome to the user.
   - List the generated files.
   - List omitted or unsupported files.
   - List assumptions, warnings, and unresolved issues.
